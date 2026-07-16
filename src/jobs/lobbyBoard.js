@@ -1,12 +1,19 @@
 const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
 const { getActiveMatches } = require('../deadlock/client');
-const { ensureHeroes, heroLabel, getHero } = require('../deadlock/heroes');
+const { ensureHeroes, heroName, getHero } = require('../deadlock/heroes');
 const { resolveSteamNames } = require('../deadlock/steamNames');
 const { loadRoster, allSteamIds } = require('../store/roster');
 const { loadState, saveState } = require('../store/state');
 
 const STAR = '\u2605'; // black star
+
+// Discord only colors text inside ```ansi``` blocks (not normal embed markdown).
+const ESC = '\u001b[';
+const RESET = `${ESC}0m`;
+const GOLD = `${ESC}1;33m`; // bold yellow/gold for tracked ASS names
+const DIM = `${ESC}0;37m`; // gray for everyone else
+const CYAN = `${ESC}0;36m`; // hero names
 
 function formatDuration(seconds, startTime) {
   let total = seconds;
@@ -33,17 +40,31 @@ function teamTitle(key, samplePlayer) {
   return `Team ${key}`;
 }
 
-function playerLine(p, rosterBySteam, nameBySteam) {
+function sanitizeAnsi(text) {
+  return String(text || '').replace(/[`\u001b]/g, '').slice(0, 40);
+}
+
+/** One roster line inside an ansi code block (gold ? name = tracked). */
+function playerLineAnsi(p, rosterBySteam, nameBySteam) {
   const steam = Number(p.account_id);
   const tracked = rosterBySteam.get(steam);
-  const name =
+  const name = sanitizeAnsi(
     (tracked && tracked.displayName) ||
-    nameBySteam.get(steam) ||
-    (steam ? `Player ${steam}` : 'Unknown');
-  const hero = heroLabel(p.hero_id);
-  const star = tracked ? `${STAR} ` : '';
-  const stream = tracked?.streamUrl ? ` ([stream](${tracked.streamUrl}))` : '';
-  return `${star}**${name}** | ${hero}${stream}`;
+      nameBySteam.get(steam) ||
+      (steam ? `Player ${steam}` : 'Unknown')
+  );
+  const hero = sanitizeAnsi(heroName(p.hero_id));
+  const stream = tracked?.streamUrl ? ' [stream]' : '';
+
+  if (tracked) {
+    return `${GOLD}${STAR} ${name}${RESET} ${CYAN}${hero}${RESET}${stream}`;
+  }
+  return `${DIM}  ${name}${RESET} ${CYAN}${hero}${RESET}`;
+}
+
+function wrapAnsiBlock(lines) {
+  const body = (lines.length ? lines : ['(empty)']).join('\n');
+  return `\`\`\`ansi\n${body}\n\`\`\``;
 }
 
 /**
@@ -69,18 +90,13 @@ function buildMatchEmbed(match, rosterBySteam, nameBySteam) {
 
   const fields = keys.slice(0, 2).map((k) => {
     const roster = byTeam.get(k) || [];
-    // Pad / show up to 6
-    const lines = roster.slice(0, 6).map((p) => playerLine(p, rosterBySteam, nameBySteam));
-    while (lines.length < 6 && lines.length < roster.length) {
-      /* noop */
-    }
+    const lines = roster.slice(0, 6).map((p) => playerLineAnsi(p, rosterBySteam, nameBySteam));
     const sample = roster[0];
     const trackedOnTeam = roster.filter((p) => rosterBySteam.has(Number(p.account_id))).length;
     const name = teamTitle(k, sample);
-    const value = lines.length ? lines.join('\n') : '_empty_';
     return {
       name: `${name}${trackedOnTeam ? ` (${STAR} ${trackedOnTeam})` : ''}`,
-      value: value.slice(0, 1024),
+      value: wrapAnsiBlock(lines).slice(0, 1024),
       inline: true,
     };
   });
@@ -91,8 +107,7 @@ function buildMatchEmbed(match, rosterBySteam, nameBySteam) {
     .setDescription(
       [
         `**${mode}** | \`${region}\` | \`${dur}\` | ${spectators} spectating`,
-        `${STAR} = Asian Super Server tracked`,
-        '_Hero name links open the character icon._',
+        `${STAR} **gold name** = Asian Super Server tracked (/link or /track)`,
       ].join('\n')
     )
     .addFields(fields)
