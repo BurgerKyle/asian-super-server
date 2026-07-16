@@ -2,19 +2,16 @@ const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
 const { getActiveMatches } = require('../deadlock/client');
 const { ensureHeroes, heroName, getHero } = require('../deadlock/heroes');
+const { heroEmoji } = require('../deadlock/heroEmojis');
 const { resolveSteamNames } = require('../deadlock/steamNames');
 const { loadRoster, allSteamIds } = require('../store/roster');
 const { loadState, saveState } = require('../store/state');
 const { getLikelyMatchPlayers, minutesSince } = require('../store/presenceMemory');
 
-const STAR = '\u2605'; // black star
+const STAR = '\u2605';
 
-// Discord only colors text inside ```ansi``` blocks (not normal embed markdown).
-const ESC = '\u001b[';
-const RESET = `${ESC}0m`;
-const GOLD = `${ESC}1;33m`; // bold yellow/gold for tracked ASS names
-const DIM = `${ESC}0;37m`; // gray for everyone else
-const CYAN = `${ESC}0;36m`; // hero names
+/** Keep one visual line even in narrow Discord layouts. */
+const NAME_MAX = 14;
 
 function formatDuration(seconds, startTime) {
   let total = seconds;
@@ -41,31 +38,34 @@ function teamTitle(key, samplePlayer) {
   return `Team ${key}`;
 }
 
-function sanitizeAnsi(text) {
-  return String(text || '').replace(/[`\u001b]/g, '').slice(0, 40);
+function shortName(raw) {
+  const s = String(raw || 'Unknown')
+    .replace(/[`*_~|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (s.length <= NAME_MAX) return s;
+  return `${s.slice(0, NAME_MAX - 1)}…`;
 }
 
-/** One roster line inside an ansi code block (gold ? name = tracked). */
-function playerLineAnsi(p, rosterBySteam, nameBySteam) {
+/**
+ * One compact line: ? Name [heroEmoji] (no wrapping hero-on-next-line).
+ * Custom emojis only render outside ```code``` blocks.
+ */
+function playerLine(p, rosterBySteam, nameBySteam) {
   const steam = Number(p.account_id);
   const tracked = rosterBySteam.get(steam);
-  const name = sanitizeAnsi(
+  const name = shortName(
     (tracked && tracked.displayName) ||
       nameBySteam.get(steam) ||
       (steam ? `Player ${steam}` : 'Unknown')
   );
-  const hero = sanitizeAnsi(heroName(p.hero_id));
-  const stream = tracked?.streamUrl ? ' [stream]' : '';
-
-  if (tracked) {
-    return `${GOLD}${STAR} ${name}${RESET} ${CYAN}${hero}${RESET}${stream}`;
-  }
-  return `${DIM}  ${name}${RESET} ${CYAN}${hero}${RESET}`;
-}
-
-function wrapAnsiBlock(lines) {
-  const body = (lines.length ? lines : ['(empty)']).join('\n');
-  return `\`\`\`ansi\n${body}\n\`\`\``;
+  const emoji = heroEmoji(p.hero_id);
+  const hero = shortName(heroName(p.hero_id));
+  const mark = tracked ? STAR : '·';
+  const nameBit = tracked ? `**${name}**` : name;
+  const heroBit = emoji || `\`${hero}\``;
+  const stream = tracked?.streamUrl ? ' [live]' : '';
+  return `${mark} ${nameBit} ${heroBit}${stream}`;
 }
 
 /**
@@ -86,19 +86,19 @@ function buildMatchEmbed(match, rosterBySteam, nameBySteam) {
     byTeam.get(k).push(p);
   }
 
-  // Prefer team order 0 then 1, then any others
   const keys = [...byTeam.keys()].sort((a, b) => Number(a) - Number(b));
 
+  // Stack teams full-width (inline:false) so names don't wrap mid-field.
   const fields = keys.slice(0, 2).map((k) => {
     const roster = byTeam.get(k) || [];
-    const lines = roster.slice(0, 6).map((p) => playerLineAnsi(p, rosterBySteam, nameBySteam));
+    const lines = roster.slice(0, 6).map((p) => playerLine(p, rosterBySteam, nameBySteam));
     const sample = roster[0];
     const trackedOnTeam = roster.filter((p) => rosterBySteam.has(Number(p.account_id))).length;
     const name = teamTitle(k, sample);
     return {
-      name: `${name}${trackedOnTeam ? ` (${STAR} ${trackedOnTeam})` : ''}`,
-      value: wrapAnsiBlock(lines).slice(0, 1024),
-      inline: true,
+      name: `${name}${trackedOnTeam ? ` (${STAR}${trackedOnTeam})` : ''}`,
+      value: (lines.length ? lines.join('\n') : '_empty_').slice(0, 1024),
+      inline: false,
     };
   });
 
@@ -108,14 +108,13 @@ function buildMatchEmbed(match, rosterBySteam, nameBySteam) {
     .setDescription(
       [
         `**${mode}** | \`${region}\` | \`${dur}\` | ${spectators} spectating`,
-        `${STAR} **gold name** = Asian Super Server tracked (/link or /track)`,
+        `${STAR} = Asian Super Server tracked  ·  hero icon = character`,
       ].join('\n')
     )
     .addFields(fields)
     .setTimestamp(new Date())
     .setFooter({ text: 'Updates every ~15s | Asia queue nights' });
 
-  // Thumbnail: first tracked player's hero portrait
   const trackedPlayer = players.find((p) => rosterBySteam.has(Number(p.account_id)));
   if (trackedPlayer) {
     const hero = getHero(trackedPlayer.hero_id);
@@ -147,7 +146,7 @@ function buildEmptyEmbed() {
 function buildEarlyMatchEmbed(earlyPlayers) {
   const lines = earlyPlayers.map((p) => {
     const ago = p.since ? ` (~${minutesSince(p.since)}m since queue popped)` : '';
-    return `${STAR} **${p.displayName}**${ago}`;
+    return `${STAR} **${shortName(p.displayName)}**${ago}`;
   });
   return new EmbedBuilder()
     .setTitle('Match found - lobby roster pending')
@@ -186,7 +185,6 @@ async function runLobbyBoard(client) {
     matches = await getActiveMatches(steamIds, config.deadlockApiKey);
   }
 
-  // Only keep matches that actually include at least one tracked player
   const roster = loadRoster();
   const rosterBySteam = new Map(roster.players.map((p) => [Number(p.steam32), p]));
   matches = (matches || []).filter((m) =>
@@ -201,7 +199,6 @@ async function runLobbyBoard(client) {
   }
   const nameBySteam = await resolveSteamNames(allAccountIds);
 
-  // Players confirmed in watch-tab matches
   const inWatchTab = new Set();
   for (const m of matches) {
     for (const p of m.players || []) {
@@ -209,7 +206,6 @@ async function runLobbyBoard(client) {
     }
   }
 
-  // Early signal: left queue, still waiting for watch-tab lobby data
   const earlyPlayers = getLikelyMatchPlayers()
     .filter((x) => !inWatchTab.has(x.steam32) && rosterBySteam.has(x.steam32))
     .map((x) => ({
@@ -226,7 +222,6 @@ async function runLobbyBoard(client) {
     embeds.push(buildEmptyEmbed());
   }
 
-  // Discord: max 10 embeds per message
   const state = loadState();
   if (state.liveLobbiesMessageId) {
     try {

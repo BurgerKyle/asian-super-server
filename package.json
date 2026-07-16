@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "register-commands": "node src/commands/register.js"
+    "register-commands": "node src/commands/register.js",
+    "sync-hero-emojis": "node src/scripts/syncHeroEmojis.js"
   },
   "engines": {
     "node": ">=18"

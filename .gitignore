@@ -6,6 +6,7 @@ data/schedule.json
 data/state.json
 data/scores.json
 data/steam_names.json
+data/hero_emojis.json
 *.out.log
 *.err.log
 .DS_Store
