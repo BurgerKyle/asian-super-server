@@ -5,6 +5,7 @@ const { ensureHeroes, heroName, getHero } = require('../deadlock/heroes');
 const { resolveSteamNames } = require('../deadlock/steamNames');
 const { loadRoster, allSteamIds } = require('../store/roster');
 const { loadState, saveState } = require('../store/state');
+const { getLikelyMatchPlayers, minutesSince } = require('../store/presenceMemory');
 
 const STAR = '\u2605'; // black star
 
@@ -129,10 +130,39 @@ function buildEmptyEmbed() {
     .setTitle('Asian Super Server | Live Lobbies')
     .setColor(0xe8a838)
     .setDescription(
-      'No tracked players in active matches right now.\nUse `/track` or `/link`, then queue on Asia.'
+      [
+        'No tracked players on the **public watch-tab** list yet.',
+        '',
+        'Valve only exposes active lobbies via the in-game watch tab (top ~200).',
+        'Asia / early-game matches often take **~10-15 minutes** to appear here.',
+        '',
+        'For earlier signal, check **Who is around** (Finding match / Match found).',
+        'Use `/track` or `/link` so we can watch your Steam status.',
+      ].join('\n')
     )
     .setTimestamp(new Date())
-    .setFooter({ text: 'Updates every ~15s | Asia queue nights' });
+    .setFooter({ text: 'Updates every ~15s | Watch-tab delay is Valve-side' });
+}
+
+function buildEarlyMatchEmbed(earlyPlayers) {
+  const lines = earlyPlayers.map((p) => {
+    const ago = p.since ? ` (~${minutesSince(p.since)}m since queue popped)` : '';
+    return `${STAR} **${p.displayName}**${ago}`;
+  });
+  return new EmbedBuilder()
+    .setTitle('Match found - lobby roster pending')
+    .setColor(0xf39c12)
+    .setDescription(
+      [
+        'These ASS players left matchmaking and are still in Deadlock, but their lobby is **not on the watch tab yet**.',
+        '',
+        lines.join('\n') || '_nobody_',
+        '',
+        '_Full 6v6 roster + heroes will show automatically once Valve lists the match._',
+      ].join('\n')
+    )
+    .setTimestamp(new Date())
+    .setFooter({ text: 'Early signal from Steam presence | Not watch-tab data' });
 }
 
 /**
@@ -171,26 +201,50 @@ async function runLobbyBoard(client) {
   }
   const nameBySteam = await resolveSteamNames(allAccountIds);
 
-  const embeds = matches.length
-    ? matches.slice(0, 8).map((m) => buildMatchEmbed(m, rosterBySteam, nameBySteam))
-    : [buildEmptyEmbed()];
+  // Players confirmed in watch-tab matches
+  const inWatchTab = new Set();
+  for (const m of matches) {
+    for (const p of m.players || []) {
+      if (rosterBySteam.has(Number(p.account_id))) inWatchTab.add(Number(p.account_id));
+    }
+  }
+
+  // Early signal: left queue, still waiting for watch-tab lobby data
+  const earlyPlayers = getLikelyMatchPlayers()
+    .filter((x) => !inWatchTab.has(x.steam32) && rosterBySteam.has(x.steam32))
+    .map((x) => ({
+      displayName: rosterBySteam.get(x.steam32).displayName,
+      since: x.since,
+    }));
+
+  /** @type {import('discord.js').EmbedBuilder[]} */
+  const embeds = [];
+  if (earlyPlayers.length) embeds.push(buildEarlyMatchEmbed(earlyPlayers));
+  if (matches.length) {
+    embeds.push(...matches.slice(0, 8).map((m) => buildMatchEmbed(m, rosterBySteam, nameBySteam)));
+  } else if (!earlyPlayers.length) {
+    embeds.push(buildEmptyEmbed());
+  }
 
   // Discord: max 10 embeds per message
   const state = loadState();
   if (state.liveLobbiesMessageId) {
     try {
       const msg = await channel.messages.fetch(state.liveLobbiesMessageId);
-      await msg.edit({ content: '**Asian Super Server | Live Lobbies**', embeds });
+      await msg.edit({ content: '**Asian Super Server | Live Lobbies**', embeds: embeds.slice(0, 10) });
       return;
     } catch {
       state.liveLobbiesMessageId = null;
     }
   }
 
-  const sent = await channel.send({ content: '**Asian Super Server | Live Lobbies**', embeds });
+  const sent = await channel.send({
+    content: '**Asian Super Server | Live Lobbies**',
+    embeds: embeds.slice(0, 10),
+  });
   state.liveLobbiesMessageId = sent.id;
   saveState(state);
   await sent.pin().catch(() => {});
 }
 
-module.exports = { runLobbyBoard, buildMatchEmbed, buildEmptyEmbed };
+module.exports = { runLobbyBoard, buildMatchEmbed, buildEmptyEmbed, buildEarlyMatchEmbed };

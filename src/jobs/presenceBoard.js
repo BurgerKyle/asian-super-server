@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
 const { getActiveMatches } = require('../deadlock/client');
 const { getPlayerSummaries, classifyPresence, presenceDetail } = require('../deadlock/steamPresence');
+const { refineStatus, minutesSince, getLikelyMatchPlayers } = require('../store/presenceMemory');
 const { loadRoster, allSteamIds } = require('../store/roster');
 const { loadState, saveState } = require('../store/state');
 
@@ -18,7 +19,7 @@ function buildPresenceEmbed(groups, steamEnabled) {
     .setTimestamp(new Date())
     .setFooter({
       text: steamEnabled
-        ? 'Steam presence + active matches | Profiles must show game details'
+        ? 'Steam presence + active matches | Full lobby roster needs watch-tab (~10-15m)'
         : 'Set STEAM_API_KEY to enable queue detection',
     });
 
@@ -41,19 +42,17 @@ function buildPresenceEmbed(groups, steamEnabled) {
     if (!list.length) return '_nobody_';
     return list
       .map((p) => {
-        const star = `${STAR} `;
-        const detail = p.detail ? ` — ${p.detail}` : '';
+        const detail = p.detail ? ` - ${p.detail}` : '';
         const stream = p.streamUrl ? ` ([stream](${p.streamUrl}))` : '';
-        return `${star}**${p.displayName}**${detail}${stream}`;
+        return `${STAR} **${p.displayName}**${detail}${stream}`;
       })
       .join('\n');
   };
 
   embed.setDescription(
     [
-      'Live view of the ASS roster via Steam + Deadlock active matches.',
-      '**Finding match** is best-effort (Steam rich presence text varies).',
-      'If Steam only says "Deadlock", they appear under **In Deadlock**.',
+      'Live ASS roster via Steam + Deadlock.',
+      '**Match found / loading** = left queue, not yet on the public watch-tab list (often ~10-15 min before full lobby shows in #live-lobbies).',
     ].join('\n')
   );
 
@@ -64,19 +63,27 @@ function buildPresenceEmbed(groups, steamEnabled) {
       inline: false,
     },
     {
-      name: `In match (${groups.in_match.length})`,
+      name: `Match found / loading (${groups.loading_match.length})`,
+      value: fmt(groups.loading_match).slice(0, 1024),
+      inline: false,
+    },
+    {
+      name: `In match - watch tab (${groups.in_match.length})`,
       value: fmt(groups.in_match).slice(0, 1024),
       inline: false,
     },
     {
-      name: `In Deadlock (${groups.in_deadlock.length})`,
+      name: `In Deadlock - menu/hideout (${groups.in_deadlock.length})`,
       value: fmt(groups.in_deadlock).slice(0, 1024),
       inline: false,
     }
   );
 
   const quiet =
-    !groups.searching.length && !groups.in_match.length && !groups.in_deadlock.length;
+    !groups.searching.length &&
+    !groups.loading_match.length &&
+    !groups.in_match.length &&
+    !groups.in_deadlock.length;
   if (quiet) {
     embed.addFields({
       name: 'Tip',
@@ -134,31 +141,43 @@ async function runPresenceBoard(client) {
 
   const groups = {
     searching: [],
+    loading_match: [],
     in_match: [],
     in_deadlock: [],
   };
 
+  const now = Date.now();
+
   for (const p of roster.players) {
     const steam32 = Number(p.steam32);
     const summary = summaries.get(steam32);
-    const status = steamEnabled
+    const raw = steamEnabled
       ? classifyPresence(summary, inMatchSet.has(steam32))
       : inMatchSet.has(steam32)
         ? 'in_match'
         : 'hidden';
 
-    if (!['searching', 'in_match', 'in_deadlock'].includes(status)) continue;
+    const status = steamEnabled ? refineStatus(steam32, raw, now) : raw;
+
+    if (!['searching', 'loading_match', 'in_match', 'in_deadlock'].includes(status)) continue;
+
+    let detail = presenceDetail(summary, status === 'loading_match' ? 'in_deadlock' : status);
+    if (status === 'loading_match') {
+      const hit = getLikelyMatchPlayers().find((x) => x.steam32 === steam32);
+      detail = hit
+        ? `Left queue ~${minutesSince(hit.since, now)}m ago - full lobby on watch tab soon`
+        : 'Match found / loading - full lobby on watch tab soon';
+    }
 
     groups[status].push({
       displayName: p.displayName,
       steam32,
       streamUrl: p.streamUrl || '',
-      detail: presenceDetail(summary, status),
+      detail,
       status,
     });
   }
 
-  // Sort names for stable embeds
   for (const key of Object.keys(groups)) {
     groups[key].sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
