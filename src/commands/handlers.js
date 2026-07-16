@@ -147,15 +147,16 @@ async function handleInteraction(interaction) {
   }
 
   if (name === 'track') {
+    // Acknowledge within 3s before any Steam/network work
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const steam32 = steam32FromInput(interaction.options.getString('steam_id', true));
     if (steam32 == null) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Invalid Steam ID. Use Steam32 or Steam64.',
-        ephemeral: true,
       });
       return;
     }
-    await interaction.deferReply({ ephemeral: true });
     const customName = interaction.options.getString('name');
     const streamUrl = interaction.options.getString('stream_url') || '';
     let displayName = customName;

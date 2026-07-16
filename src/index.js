@@ -61,9 +61,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     await handleInteraction(interaction);
   } catch (err) {
+    const code = err?.code;
+    // 10062 = unknown interaction (expired or another bot instance already handled it)
+    // 40060 = already acknowledged
+    if (code === 10062 || code === 40060) {
+      console.warn(`[command:/${cmd}] ignored Discord ${code}: ${err.message}`);
+      return;
+    }
     console.error(`[command:/${cmd}]`, err && err.stack ? err.stack : err);
-    const payload = { content: `Error: ${err.message || 'unknown'}`, ephemeral: true };
     try {
+      const payload = { content: `Error: ${err.message || 'unknown'}`, flags: 64 };
       if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
       else await interaction.reply(payload);
     } catch (replyErr) {
