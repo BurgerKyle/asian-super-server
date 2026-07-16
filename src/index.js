@@ -5,7 +5,7 @@ const { runLobbyBoard } = require('./jobs/lobbyBoard');
 const { runQueueNotify } = require('./jobs/queueNotify');
 const { runLeaderboard } = require('./jobs/leaderboard');
 const { runPresenceBoard } = require('./jobs/presenceBoard');
-const { ensureHeroEmojis } = require('./deadlock/heroEmojis');
+const { ensureHeroEmojisBackground } = require('./deadlock/heroEmojis');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -37,14 +37,11 @@ function startLoops() {
   );
 }
 
-client.once(Events.ClientReady, async (c) => {
+client.once(Events.ClientReady, (c) => {
   console.log(`[boot] Asian Super Server online as ${c.user.tag}`);
-  try {
-    await ensureHeroEmojis(c);
-  } catch (err) {
-    console.warn('[boot] hero emoji sync failed:', err.message);
-  }
+  // Start poll loops immediately — hero emoji upload must not block readiness
   startLoops();
+  ensureHeroEmojisBackground(c);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

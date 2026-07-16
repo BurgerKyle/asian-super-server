@@ -4,10 +4,12 @@ const { config } = require('../config');
 const { ensureHeroes } = require('./heroes');
 
 const CACHE_FILE = path.join(config.dataDir, 'hero_emojis.json');
+/** Don't upload every hero in one boot — Discord rate-limits and blocks readiness. */
+const MAX_CREATE_PER_BOOT = Number(process.env.HERO_EMOJI_CREATE_PER_BOOT || 15);
 
 /** @type {Map<number, string>} heroId -> <:name:id> */
 let emojiByHeroId = new Map();
-let synced = false;
+let syncPromise = null;
 
 function loadDiskCache() {
   try {
@@ -43,13 +45,16 @@ function heroEmoji(heroId) {
 
 /**
  * Sync Deadlock hero icons as Discord application emojis (bot-only).
- * Safe on every boot — skips heroes that already exist.
+ * Loads disk cache first, reuses existing app emojis, creates a few missing
+ * ones per boot (non-blocking caller should not await forever).
  *
  * @param {import('discord.js').Client} client
  */
 async function ensureHeroEmojis(client) {
-  if (synced && emojiByHeroId.size) return emojiByHeroId;
   loadDiskCache();
+  if (emojiByHeroId.size) {
+    console.log(`[hero-emojis] loaded ${emojiByHeroId.size} from disk cache`);
+  }
 
   if (!client.application) {
     console.warn('[hero-emojis] client.application missing');
@@ -57,7 +62,9 @@ async function ensureHeroEmojis(client) {
   }
 
   const heroMap = await ensureHeroes(config.deadlockApiKey);
-  await client.application.emojis.fetch().catch(() => null);
+  await client.application.emojis.fetch().catch((err) => {
+    console.warn('[hero-emojis] fetch failed:', err.message);
+  });
 
   const byName = new Map();
   for (const emoji of client.application.emojis.cache.values()) {
@@ -66,6 +73,7 @@ async function ensureHeroEmojis(client) {
 
   let created = 0;
   let reused = 0;
+  let skippedCreate = 0;
 
   for (const [id, hero] of heroMap) {
     const name = emojiNameForHero(id);
@@ -76,7 +84,15 @@ async function ensureHeroEmojis(client) {
       continue;
     }
 
+    // Already have a cached mention from a previous session — keep it
+    if (emojiByHeroId.has(id)) continue;
+
     if (!hero.icon) continue;
+
+    if (created >= MAX_CREATE_PER_BOOT) {
+      skippedCreate += 1;
+      continue;
+    }
 
     try {
       const emoji = await client.application.emojis.create({
@@ -86,22 +102,42 @@ async function ensureHeroEmojis(client) {
       emojiByHeroId.set(id, emoji.toString());
       byName.set(name, emoji);
       created += 1;
-      await new Promise((r) => setTimeout(r, 350));
+      console.log(`[hero-emojis] created ${name} (${created}/${MAX_CREATE_PER_BOOT} this boot)`);
+      await new Promise((r) => setTimeout(r, 400));
     } catch (err) {
       console.warn(`[hero-emojis] failed ${name}:`, err.message);
+      // Stop creating more this boot if we're rate-limited
+      if (/rate|429|limit/i.test(err.message)) break;
     }
   }
 
   saveDiskCache();
-  synced = true;
-  console.log(`[hero-emojis] ready: ${emojiByHeroId.size} (created=${created}, reused=${reused})`);
+  console.log(
+    `[hero-emojis] ready: ${emojiByHeroId.size} (created=${created}, reused=${reused}, deferred=${skippedCreate})`
+  );
   return emojiByHeroId;
+}
+
+/**
+ * Fire-and-forget sync so bot loops can start immediately.
+ * @param {import('discord.js').Client} client
+ */
+function ensureHeroEmojisBackground(client) {
+  if (syncPromise) return syncPromise;
+  loadDiskCache();
+  syncPromise = ensureHeroEmojis(client)
+    .catch((err) => console.warn('[hero-emojis] sync failed:', err.message))
+    .finally(() => {
+      syncPromise = null;
+    });
+  return syncPromise;
 }
 
 loadDiskCache();
 
 module.exports = {
   ensureHeroEmojis,
+  ensureHeroEmojisBackground,
   heroEmoji,
   emojiNameForHero,
 };
