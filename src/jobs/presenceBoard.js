@@ -1,8 +1,14 @@
 const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
 const { getActiveMatches } = require('../deadlock/client');
-const { getPlayerSummaries, classifyPresence, presenceDetail } = require('../deadlock/steamPresence');
-const { refineStatus, minutesSince, getLikelyMatchPlayers } = require('../store/presenceMemory');
+const { getPlayerSummaries, classifyPresence } = require('../deadlock/steamPresence');
+const {
+  refineStatus,
+  getMemory,
+  getLikelyMatchPlayers,
+  formatElapsed,
+  matchElapsedMs,
+} = require('../store/presenceMemory');
 const { loadRoster, allSteamIds } = require('../store/roster');
 const { loadState, saveState } = require('../store/state');
 
@@ -19,7 +25,7 @@ function buildPresenceEmbed(groups, steamEnabled) {
     .setTimestamp(new Date())
     .setFooter({
       text: steamEnabled
-        ? 'Steam presence + active matches | Full lobby roster needs watch-tab (~10-15m)'
+        ? 'Timers: queue = since we saw Searching | match = API duration_s/start_time'
         : 'Set STEAM_API_KEY to enable queue detection',
     });
 
@@ -42,9 +48,10 @@ function buildPresenceEmbed(groups, steamEnabled) {
     if (!list.length) return '_nobody_';
     return list
       .map((p) => {
-        const detail = p.detail ? ` - ${p.detail}` : '';
+        const timer = p.timer ? ` \`${p.timer}\`` : '';
+        const label = p.label ? ` ${p.label}` : '';
         const stream = p.streamUrl ? ` ([stream](${p.streamUrl}))` : '';
-        return `${STAR} **${p.displayName}**${detail}${stream}`;
+        return `${STAR} **${p.displayName}**${timer}${label}${stream}`;
       })
       .join('\n');
   };
@@ -52,7 +59,7 @@ function buildPresenceEmbed(groups, steamEnabled) {
   embed.setDescription(
     [
       'Live ASS roster via Steam + Deadlock.',
-      '**Match found / loading** = left queue, not yet on the public watch-tab list (often ~10-15 min before full lobby shows in #live-lobbies).',
+      'Timers update every poll. Match clocks use watch-tab `duration_s` / `start_time` when available.',
     ].join('\n')
   );
 
@@ -68,7 +75,7 @@ function buildPresenceEmbed(groups, steamEnabled) {
       inline: false,
     },
     {
-      name: `In match - watch tab (${groups.in_match.length})`,
+      name: `In match (${groups.in_match.length})`,
       value: fmt(groups.in_match).slice(0, 1024),
       inline: false,
     },
@@ -112,16 +119,27 @@ async function runPresenceBoard(client) {
   const roster = loadRoster();
   const steamIds = allSteamIds();
   const steamEnabled = Boolean(config.steamApiKey);
+  const now = Date.now();
 
   /** @type {Set<number>} */
   const inMatchSet = new Set();
+  /** @type {Map<number, { matchId: *, elapsedMs: number|null }>} */
+  const matchInfoBySteam = new Map();
+
   if (steamIds.length) {
     try {
       const matches = await getActiveMatches(steamIds, config.deadlockApiKey);
       for (const m of matches || []) {
+        const elapsed = matchElapsedMs(m, now);
         for (const p of m.players || []) {
           const id = Number(p.account_id);
-          if (steamIds.includes(id)) inMatchSet.add(id);
+          if (!steamIds.includes(id)) continue;
+          inMatchSet.add(id);
+          // Prefer longest/known elapsed if player appears somehow twice
+          const prev = matchInfoBySteam.get(id);
+          if (!prev || (elapsed != null && (prev.elapsedMs == null || elapsed > prev.elapsedMs))) {
+            matchInfoBySteam.set(id, { matchId: m.match_id, elapsedMs: elapsed });
+          }
         }
       }
     } catch (err) {
@@ -146,8 +164,6 @@ async function runPresenceBoard(client) {
     in_deadlock: [],
   };
 
-  const now = Date.now();
-
   for (const p of roster.players) {
     const steam32 = Number(p.steam32);
     const summary = summaries.get(steam32);
@@ -158,22 +174,43 @@ async function runPresenceBoard(client) {
         : 'hidden';
 
     const status = steamEnabled ? refineStatus(steam32, raw, now) : raw;
-
     if (!['searching', 'loading_match', 'in_match', 'in_deadlock'].includes(status)) continue;
 
-    let detail = presenceDetail(summary, status === 'loading_match' ? 'in_deadlock' : status);
-    if (status === 'loading_match') {
+    const mem = getMemory(steam32);
+    let timer = null;
+    let label = '';
+
+    if (status === 'searching') {
+      const started = mem?.searchingAt;
+      timer = started != null ? formatElapsed(now - started) : null;
+      label = 'in queue';
+    } else if (status === 'loading_match') {
       const hit = getLikelyMatchPlayers().find((x) => x.steam32 === steam32);
-      detail = hit
-        ? `Left queue ~${minutesSince(hit.since, now)}m ago - full lobby on watch tab soon`
-        : 'Match found / loading - full lobby on watch tab soon';
+      const since = hit?.since || mem?.likelyMatchSince;
+      timer = since != null ? formatElapsed(now - since) : null;
+      label = 'since queue popped';
+    } else if (status === 'in_match') {
+      const info = matchInfoBySteam.get(steam32);
+      if (info?.elapsedMs != null) {
+        timer = formatElapsed(info.elapsedMs);
+        label = info.matchId != null ? `in match #${info.matchId}` : 'in match';
+      } else if (mem?.likelyMatchSince) {
+        // Fell back before watch-tab duration existed
+        timer = formatElapsed(now - mem.likelyMatchSince);
+        label = 'in match (est.)';
+      } else {
+        label = 'in match';
+      }
+    } else if (status === 'in_deadlock') {
+      label = 'menu / hideout';
     }
 
     groups[status].push({
       displayName: p.displayName,
       steam32,
       streamUrl: p.streamUrl || '',
-      detail,
+      timer,
+      label,
       status,
     });
   }
