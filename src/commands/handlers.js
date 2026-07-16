@@ -151,15 +151,24 @@ async function handleInteraction(interaction) {
     if (steam32 == null) {
       await interaction.reply({
         content: 'Invalid Steam ID. Use Steam32 or Steam64.',
-        flags: MessageFlags.Ephemeral,
+        ephemeral: true,
       });
       return;
     }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferReply({ ephemeral: true });
     const customName = interaction.options.getString('name');
     const streamUrl = interaction.options.getString('stream_url') || '';
-    const displayName = customName || (await resolveSteamName(steam32));
+    let displayName = customName;
+    if (!displayName) {
+      try {
+        displayName = await resolveSteamName(steam32);
+      } catch (err) {
+        console.warn('[track] name lookup failed:', err.message);
+        displayName = `Player ${steam32}`;
+      }
+    }
     const row = upsertTracked({ steam32, displayName, streamUrl });
+    console.log(`[track] + ${row.displayName} (${row.steam32}) roster=${loadRoster().players.length}`);
     await interaction.editReply({
       content: `Tracking **${row.displayName}** (\`${row.steam32}\`). They will get a ${'\u2605'} on the live lobby board.`,
     });

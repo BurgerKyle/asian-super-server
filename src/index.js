@@ -17,11 +17,10 @@ function startLoops() {
     try {
       await fn();
     } catch (err) {
-      console.error(`[${label}]`, err.message || err);
+      console.error(`[${label}]`, err && err.stack ? err.stack : err);
     }
   };
 
-  // Kick off immediately, then on intervals
   safe('lobby', () => runLobbyBoard(client))();
   safe('queue', () => runQueueNotify(client))();
   safe('leaderboard', () => runLeaderboard(client))();
@@ -39,19 +38,37 @@ function startLoops() {
 
 client.once(Events.ClientReady, (c) => {
   console.log(`[boot] Asian Super Server online as ${c.user.tag}`);
-  // Start poll loops immediately — hero emoji upload must not block readiness
   startLoops();
   ensureHeroEmojisBackground(c);
 });
 
+// Without this listener, Discord.js "error" events crash the process with little useful context.
+client.on('error', (err) => {
+  console.error('[discord:error]', err && err.stack ? err.stack : err);
+});
+client.on('warn', (msg) => {
+  console.warn('[discord:warn]', msg);
+});
+client.on('shardError', (err) => {
+  console.error('[discord:shardError]', err && err.stack ? err.stack : err);
+});
+client.on('invalidated', () => {
+  console.error('[discord:invalidated] session invalidated - restart the bot');
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
+  const cmd = interaction.isChatInputCommand?.() ? interaction.commandName : 'unknown';
   try {
     await handleInteraction(interaction);
   } catch (err) {
-    console.error('[command]', err);
-    const msg = { content: `Error: ${err.message}`, ephemeral: true };
-    if (interaction.replied || interaction.deferred) await interaction.followUp(msg).catch(() => {});
-    else await interaction.reply(msg).catch(() => {});
+    console.error(`[command:/${cmd}]`, err && err.stack ? err.stack : err);
+    const payload = { content: `Error: ${err.message || 'unknown'}`, ephemeral: true };
+    try {
+      if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
+      else await interaction.reply(payload);
+    } catch (replyErr) {
+      console.error('[command:reply-failed]', replyErr.message);
+    }
   }
 });
 
@@ -61,5 +78,14 @@ client.login(config.token).catch((err) => {
 });
 
 process.on('unhandledRejection', (err) => {
-  console.error('[unhandledRejection]', err);
+  console.error('[unhandledRejection]', err && err.stack ? err.stack : err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+  // Stay alive for transient filesystem / Discord blips; exit only on truly fatal cases later if needed.
+});
+
+process.on('exit', (code) => {
+  console.log(`[exit] code=${code}`);
 });

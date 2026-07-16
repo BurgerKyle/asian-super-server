@@ -1,33 +1,23 @@
-const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
+const { writeJsonAtomic, readJsonSafe } = require('./safeJson');
 
 function filePath(name) {
   return path.join(config.dataDir, name);
 }
 
 function readJson(name, fallback) {
-  const p = filePath(name);
-  if (!fs.existsSync(p)) return structuredClone(fallback);
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch {
-    return structuredClone(fallback);
-  }
+  return readJsonSafe(filePath(name), fallback);
 }
 
 function writeJson(name, data) {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  const tmp = filePath(`${name}.tmp`);
-  const dest = filePath(name);
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, dest);
+  writeJsonAtomic(filePath(name), data);
 }
 
 /**
  * Roster entry:
  * {
- *   discordId: string | null,   // set by /link; null for /track-only
+ *   discordId: string | null,
  *   steam32: number,
  *   displayName: string,
  *   streamUrl?: string,
@@ -53,7 +43,6 @@ function findBySteam(steam32) {
   return loadRoster().players.find((p) => Number(p.steam32) === Number(steam32));
 }
 
-/** Self-link: Discord user <-> Steam (keyed by discordId, merges if steam already tracked). */
 function upsertPlayer(entry) {
   const roster = loadRoster();
   const steam32 = Number(entry.steam32);
@@ -78,7 +67,6 @@ function upsertPlayer(entry) {
   return row;
 }
 
-/** Track a Steam ID without tying it to the caller's Discord account. */
 function upsertTracked(entry) {
   const roster = loadRoster();
   const steam32 = Number(entry.steam32);

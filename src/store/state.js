@@ -1,26 +1,17 @@
-const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
+const { writeJsonAtomic, readJsonSafe } = require('./safeJson');
 
 function filePath(name) {
   return path.join(config.dataDir, name);
 }
 
 function readJson(name, fallback) {
-  const p = filePath(name);
-  if (!fs.existsSync(p)) return structuredClone(fallback);
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch {
-    return structuredClone(fallback);
-  }
+  return readJsonSafe(filePath(name), fallback);
 }
 
 function writeJson(name, data) {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  const tmp = filePath(`${name}.tmp`);
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, filePath(name));
+  writeJsonAtomic(filePath(name), data);
 }
 
 /** Persistent bot state: Discord message IDs we edit in-place, last notify stamps */
@@ -39,18 +30,6 @@ function saveState(state) {
   writeJson('state.json', state);
 }
 
-/**
- * Schedule shape:
- * {
- *   enabled: boolean,
- *   timezone: "Asia/Manila",
- *   days: [0-6] Sunday=0,
- *   hour: 21,
- *   minute: 0,
- *   serverLabel: "Asia Super Server",
- *   remindMinutes: [15, 0]
- * }
- */
 const EMPTY_SCHEDULE = {
   enabled: false,
   timezone: 'Asia/Manila',
@@ -71,13 +50,6 @@ function saveSchedule(schedule) {
   writeJson('schedule.json', schedule);
 }
 
-/**
- * Queue-night scores:
- * {
- *   season: "2026-Q3",
- *   players: { "<steam32>": { wins, losses, games, attendance } }
- * }
- */
 const EMPTY_SCORES = { season: 'default', players: {} };
 
 function loadScores() {

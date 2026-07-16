@@ -1,34 +1,43 @@
-const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
+const { writeJsonAtomic, readJsonSafe } = require('../store/safeJson');
 
 const CACHE_FILE = path.join(config.dataDir, 'steam_names.json');
 const STEAM64_BASE = 76561197960265728n;
+const FETCH_TIMEOUT_MS = 8000;
 
 /** @type {Record<string, { name: string, fetchedAt: number }>} */
 let cache = null;
 
 function loadCache() {
   if (cache) return cache;
-  try {
-    if (fs.existsSync(CACHE_FILE)) {
-      cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-      return cache;
-    }
-  } catch {
-    /* ignore */
-  }
-  cache = {};
+  cache = readJsonSafe(CACHE_FILE, {});
   return cache;
 }
 
 function saveCache() {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+  try {
+    writeJsonAtomic(CACHE_FILE, cache);
+  } catch (err) {
+    console.warn('[steam-names] save failed:', err.message);
+  }
 }
 
 function toSteam64(steam32) {
   return (BigInt(steam32) + STEAM64_BASE).toString();
+}
+
+async function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'AsianSuperServer/1.0' },
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /**
@@ -46,9 +55,7 @@ async function resolveSteamName(steam32) {
 
   const steam64 = toSteam64(steam32);
   try {
-    const res = await fetch(`https://playerdb.co/api/player/steam/${steam64}`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'AsianSuperServer/1.0' },
-    });
+    const res = await fetchWithTimeout(`https://playerdb.co/api/player/steam/${steam64}`, FETCH_TIMEOUT_MS);
     if (res.ok) {
       const data = await res.json();
       const name =
@@ -62,8 +69,8 @@ async function resolveSteamName(steam32) {
         return name;
       }
     }
-  } catch {
-    /* fall through */
+  } catch (err) {
+    console.warn(`[steam-names] lookup ${steam32} failed:`, err.message);
   }
 
   const fallback = `Player ${steam32}`;
@@ -72,11 +79,6 @@ async function resolveSteamName(steam32) {
   return fallback;
 }
 
-/**
- * Resolve many Steam32 ids (sequential to be polite).
- * @param {number[]} steam32s
- * @returns {Promise<Map<number, string>>}
- */
 async function resolveSteamNames(steam32s) {
   const map = new Map();
   const unique = [...new Set(steam32s.map(Number).filter((n) => Number.isFinite(n) && n > 0))];

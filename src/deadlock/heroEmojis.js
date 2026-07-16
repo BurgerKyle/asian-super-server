@@ -2,9 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { config } = require('../config');
 const { ensureHeroes } = require('./heroes');
+const { writeJsonAtomic, readJsonSafe } = require('../store/safeJson');
 
 const CACHE_FILE = path.join(config.dataDir, 'hero_emojis.json');
-/** Don't upload every hero in one boot ó Discord rate-limits and blocks readiness. */
+/** Don't upload every hero in one boot - Discord rate-limits and blocks readiness. */
 const MAX_CREATE_PER_BOOT = Number(process.env.HERO_EMOJI_CREATE_PER_BOOT || 15);
 
 /** @type {Map<number, string>} heroId -> <:name:id> */
@@ -13,8 +14,7 @@ let syncPromise = null;
 
 function loadDiskCache() {
   try {
-    if (!fs.existsSync(CACHE_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    const raw = readJsonSafe(CACHE_FILE, { emojis: {} });
     const next = new Map();
     for (const [k, v] of Object.entries(raw.emojis || {})) {
       next.set(Number(k), String(v));
@@ -26,13 +26,13 @@ function loadDiskCache() {
 }
 
 function saveDiskCache() {
-  fs.mkdirSync(config.dataDir, { recursive: true });
   const emojis = {};
   for (const [k, v] of emojiByHeroId) emojis[String(k)] = v;
-  fs.writeFileSync(
-    CACHE_FILE,
-    JSON.stringify({ updatedAt: new Date().toISOString(), emojis }, null, 2) + '\n'
-  );
+  try {
+    writeJsonAtomic(CACHE_FILE, { updatedAt: new Date().toISOString(), emojis });
+  } catch (err) {
+    console.warn('[hero-emojis] cache save failed:', err.message);
+  }
 }
 
 function emojiNameForHero(heroId) {
@@ -84,7 +84,7 @@ async function ensureHeroEmojis(client) {
       continue;
     }
 
-    // Already have a cached mention from a previous session ó keep it
+    // Already have a cached mention from a previous session ù keep it
     if (emojiByHeroId.has(id)) continue;
 
     if (!hero.icon) continue;
