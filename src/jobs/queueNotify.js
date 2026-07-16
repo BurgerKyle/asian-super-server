@@ -65,7 +65,7 @@ async function runQueueNotify(client) {
       : `Queue in **${hit} minutes**`;
 
   const embed = new EmbedBuilder()
-    .setTitle('Asian Super Server — Queue Night')
+    .setTitle('Asian Super Server | Queue Night')
     .setColor(0x2ecc71)
     .setDescription(
       [
@@ -97,7 +97,7 @@ async function forceQueueNotify(client, extraNote = '') {
   const channel = await client.channels.fetch(channelId);
   const server = schedule.serverLabel || config.defaultServerLabel;
   const embed = new EmbedBuilder()
-    .setTitle('Asian Super Server — Queue Call')
+    .setTitle('Asian Super Server | Queue Call')
     .setColor(0x2ecc71)
     .setDescription(
       [`**Queue up now** on **${server}**.`, extraNote ? `\n${extraNote}` : ''].join('')
