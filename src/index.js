@@ -4,6 +4,7 @@ const { handleInteraction } = require('./commands/handlers');
 const { runLobbyBoard } = require('./jobs/lobbyBoard');
 const { runQueueNotify } = require('./jobs/queueNotify');
 const { runLeaderboard } = require('./jobs/leaderboard');
+const { runPresenceBoard } = require('./jobs/presenceBoard');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -23,13 +24,15 @@ function startLoops() {
   safe('lobby', () => runLobbyBoard(client))();
   safe('queue', () => runQueueNotify(client))();
   safe('leaderboard', () => runLeaderboard(client))();
+  safe('presence', () => runPresenceBoard(client))();
 
   setInterval(safe('lobby', () => runLobbyBoard(client)), config.lobbyPollMs);
   setInterval(safe('queue', () => runQueueNotify(client)), config.queueCheckMs);
   setInterval(safe('leaderboard', () => runLeaderboard(client)), config.leaderboardPollMs);
+  setInterval(safe('presence', () => runPresenceBoard(client)), config.presencePollMs);
 
   console.log(
-    `[boot] loops: lobby=${config.lobbyPollMs}ms queue=${config.queueCheckMs}ms leaderboard=${config.leaderboardPollMs}ms`
+    `[boot] loops: lobby=${config.lobbyPollMs}ms queue=${config.queueCheckMs}ms leaderboard=${config.leaderboardPollMs}ms presence=${config.presencePollMs}ms steam=${config.steamApiKey ? 'on' : 'off'}`
   );
 }
 

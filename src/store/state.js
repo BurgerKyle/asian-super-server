@@ -27,6 +27,7 @@ function writeJson(name, data) {
 const EMPTY_STATE = {
   liveLobbiesMessageId: null,
   leaderboardMessageId: null,
+  presenceMessageId: null,
   lastQueueNotifyKey: null,
 };
 
