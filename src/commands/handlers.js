@@ -3,14 +3,21 @@ const {
   PermissionFlagsBits,
   MessageFlags,
 } = require('discord.js');
-const { upsertPlayer, removeByDiscord, loadRoster, findByDiscord } = require('../store/roster');
+const {
+  upsertPlayer,
+  upsertTracked,
+  removeByDiscord,
+  removeBySteam,
+  loadRoster,
+  findByDiscord,
+} = require('../store/roster');
 const { loadSchedule, saveSchedule } = require('../store/state');
 const { forceQueueNotify } = require('../jobs/queueNotify');
+const { resolveSteamName } = require('../deadlock/steamNames');
 const { config } = require('../config');
 
 function steam32FromInput(raw) {
   const s = String(raw).trim();
-  // Accept Steam64 (7656119...) or Steam32
   if (/^\d{17}$/.test(s)) {
     return Number(BigInt(s) - 76561197960265728n);
   }
@@ -22,20 +29,41 @@ function steam32FromInput(raw) {
 const commands = [
   new SlashCommandBuilder()
     .setName('link')
-    .setDescription('Link your Discord account to a Deadlock / Steam account ID')
+    .setDescription('Link YOUR Discord account to a Steam / Deadlock ID')
     .addStringOption((o) =>
       o
         .setName('steam_id')
-        .setDescription('Steam32 account ID (or Steam64). Find it on deadlock-api.com / Dotabuff.')
+        .setDescription('Steam32 (or Steam64). Find it on deadlock-api.com')
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName('stream_url').setDescription('Optional Twitch/YouTube stream URL').setRequired(false)
+      o.setName('stream_url').setDescription('Optional Twitch/YouTube URL').setRequired(false)
     ),
 
   new SlashCommandBuilder()
     .setName('unlink')
-    .setDescription('Remove your Steam link from the Asian Super Server roster'),
+    .setDescription('Remove YOUR Discord Steam link from the roster'),
+
+  new SlashCommandBuilder()
+    .setName('track')
+    .setDescription('Add a Steam ID to the tracked list (not tied to your Discord)')
+    .addStringOption((o) =>
+      o.setName('steam_id').setDescription('Steam32 or Steam64 to track').setRequired(true)
+    )
+    .addStringOption((o) =>
+      o.setName('name').setDescription('Display name (optional; auto-fetched if omitted)').setRequired(false)
+    )
+    .addStringOption((o) =>
+      o.setName('stream_url').setDescription('Optional Twitch/YouTube URL').setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('untrack')
+    .setDescription('Remove a Steam ID from the tracked list')
+    .addStringOption((o) =>
+      o.setName('steam_id').setDescription('Steam32 or Steam64 to remove').setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   new SlashCommandBuilder()
     .setName('roster')
@@ -53,12 +81,16 @@ const commands = [
       sc
         .setName('set')
         .setDescription('Set queue nights (admin)')
-        .addIntegerOption((o) => o.setName('hour').setDescription('Hour 0-23 local').setRequired(true).setMinValue(0).setMaxValue(23))
-        .addIntegerOption((o) => o.setName('minute').setDescription('Minute 0-59').setRequired(true).setMinValue(0).setMaxValue(59))
+        .addIntegerOption((o) =>
+          o.setName('hour').setDescription('Hour 0-23 local').setRequired(true).setMinValue(0).setMaxValue(23)
+        )
+        .addIntegerOption((o) =>
+          o.setName('minute').setDescription('Minute 0-59').setRequired(true).setMinValue(0).setMaxValue(59)
+        )
         .addStringOption((o) =>
           o
             .setName('days')
-            .setDescription('Comma days: 0=Sun … 6=Sat (e.g. 5,6 for Fri+Sat)')
+            .setDescription('Comma days: 0=Sun .. 6=Sat (e.g. 5,6 for Fri+Sat)')
             .setRequired(true)
         )
         .addStringOption((o) =>
@@ -85,7 +117,10 @@ async function handleInteraction(interaction) {
   if (name === 'link') {
     const steam32 = steam32FromInput(interaction.options.getString('steam_id', true));
     if (steam32 == null) {
-      await interaction.reply({ content: 'Invalid Steam ID. Use Steam32 (e.g. 123456789) or Steam64.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: 'Invalid Steam ID. Use Steam32 (e.g. 123456789) or Steam64.',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     const streamUrl = interaction.options.getString('stream_url') || '';
@@ -96,7 +131,7 @@ async function handleInteraction(interaction) {
       streamUrl,
     });
     await interaction.reply({
-      content: `Linked **${row.displayName}** ? Steam32 \`${row.steam32}\`${streamUrl ? `\nStream: ${streamUrl}` : ''}`,
+      content: `Linked **${row.displayName}** -> Steam32 \`${row.steam32}\`${streamUrl ? `\nStream: ${streamUrl}` : ''}`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -111,15 +146,57 @@ async function handleInteraction(interaction) {
     return;
   }
 
+  if (name === 'track') {
+    const steam32 = steam32FromInput(interaction.options.getString('steam_id', true));
+    if (steam32 == null) {
+      await interaction.reply({
+        content: 'Invalid Steam ID. Use Steam32 or Steam64.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const customName = interaction.options.getString('name');
+    const streamUrl = interaction.options.getString('stream_url') || '';
+    const displayName = customName || (await resolveSteamName(steam32));
+    const row = upsertTracked({ steam32, displayName, streamUrl });
+    await interaction.editReply({
+      content: `Tracking **${row.displayName}** (\`${row.steam32}\`). They will get a ${'\u2605'} on the live lobby board.`,
+    });
+    return;
+  }
+
+  if (name === 'untrack') {
+    const steam32 = steam32FromInput(interaction.options.getString('steam_id', true));
+    if (steam32 == null) {
+      await interaction.reply({
+        content: 'Invalid Steam ID.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    const ok = removeBySteam(steam32);
+    await interaction.reply({
+      content: ok ? `Removed \`${steam32}\` from the tracked list.` : `No tracked player with Steam32 \`${steam32}\`.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (name === 'roster') {
     const { players } = loadRoster();
     if (!players.length) {
-      await interaction.reply({ content: 'Roster is empty. Use `/link` to join.', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: 'Roster is empty. Use `/link` for yourself or `/track` for anyone.',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
-    const lines = players
-      .slice(0, 40)
-      .map((p) => `• <@${p.discordId}> — \`${p.steam32}\`${p.streamUrl ? ' ??' : ''}`);
+    const lines = players.slice(0, 40).map((p) => {
+      const who = p.discordId ? `<@${p.discordId}>` : `*tracked*`;
+      const star = '\u2605';
+      return `${star} **${p.displayName}** | \`${p.steam32}\` | ${who}${p.streamUrl ? ' | stream' : ''}`;
+    });
     await interaction.reply({
       content: `**Asian Super Server roster** (${players.length})\n${lines.join('\n')}`,
       flags: MessageFlags.Ephemeral,
@@ -130,7 +207,10 @@ async function handleInteraction(interaction) {
   if (name === 'mystats') {
     const row = findByDiscord(interaction.user.id);
     if (!row) {
-      await interaction.reply({ content: 'Not linked. Use `/link steam_id:...`', flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        content: 'Not linked. Use `/link steam_id:...` for your own account, or ask an admin to `/track` someone.',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     await interaction.reply({
@@ -147,7 +227,7 @@ async function handleInteraction(interaction) {
       await interaction.reply({
         content: [
           `**Enabled:** ${s.enabled}`,
-          `**Days:** ${(s.days || []).join(', ')} (0=Sun … 6=Sat)`,
+          `**Days:** ${(s.days || []).join(', ')} (0=Sun .. 6=Sat)`,
           `**Time:** ${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')} (${s.timezone})`,
           `**Server:** ${s.serverLabel || config.defaultServerLabel}`,
           `**Remind at:** T-${(s.remindMinutes || []).join(', T-')} min`,
@@ -163,7 +243,10 @@ async function handleInteraction(interaction) {
         .map((x) => Number.parseInt(x.trim(), 10))
         .filter((n) => n >= 0 && n <= 6);
       if (!days.length) {
-        await interaction.reply({ content: 'Provide at least one day 0–6.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({
+          content: 'Provide at least one day 0-6.',
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       const schedule = {
@@ -177,7 +260,7 @@ async function handleInteraction(interaction) {
       };
       saveSchedule(schedule);
       await interaction.reply({
-        content: `Schedule saved. Queue nights: days [${days.join(',')}] at ${schedule.hour}:${String(schedule.minute).padStart(2, '0')} ${schedule.timezone} ? **${schedule.serverLabel}**`,
+        content: `Schedule saved. Queue nights: days [${days.join(',')}] at ${schedule.hour}:${String(schedule.minute).padStart(2, '0')} ${schedule.timezone} -> **${schedule.serverLabel}**`,
       });
       return;
     }

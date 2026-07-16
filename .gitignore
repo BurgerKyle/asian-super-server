@@ -5,6 +5,7 @@ data/roster.json
 data/schedule.json
 data/state.json
 data/scores.json
+data/steam_names.json
 *.out.log
 *.err.log
 .DS_Store

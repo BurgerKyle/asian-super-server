@@ -25,13 +25,14 @@ function writeJson(name, data) {
 }
 
 /**
- * Roster entry shape:
+ * Roster entry:
  * {
- *   discordId: string,
+ *   discordId: string | null,   // set by /link; null for /track-only
  *   steam32: number,
  *   displayName: string,
  *   streamUrl?: string,
- *   linkedAt: string (ISO)
+ *   linkedAt: string (ISO),
+ *   source: 'link' | 'track'
  * }
  */
 const EMPTY_ROSTER = { players: [] };
@@ -45,24 +46,55 @@ function saveRoster(roster) {
 }
 
 function findByDiscord(discordId) {
-  return loadRoster().players.find((p) => p.discordId === String(discordId));
+  return loadRoster().players.find((p) => p.discordId && p.discordId === String(discordId));
 }
 
 function findBySteam(steam32) {
   return loadRoster().players.find((p) => Number(p.steam32) === Number(steam32));
 }
 
+/** Self-link: Discord user <-> Steam (keyed by discordId, merges if steam already tracked). */
 function upsertPlayer(entry) {
   const roster = loadRoster();
-  const i = roster.players.findIndex((p) => p.discordId === String(entry.discordId));
+  const steam32 = Number(entry.steam32);
+  const discordId = String(entry.discordId);
+
+  let i = roster.players.findIndex((p) => p.discordId === discordId);
+  if (i < 0) i = roster.players.findIndex((p) => Number(p.steam32) === steam32);
+
+  const prev = i >= 0 ? roster.players[i] : {};
   const row = {
-    discordId: String(entry.discordId),
-    steam32: Number(entry.steam32),
-    displayName: entry.displayName || entry.discordId,
-    streamUrl: entry.streamUrl || '',
-    linkedAt: entry.linkedAt || new Date().toISOString(),
+    discordId,
+    steam32,
+    displayName: entry.displayName || prev.displayName || discordId,
+    streamUrl: entry.streamUrl != null ? entry.streamUrl : prev.streamUrl || '',
+    linkedAt: prev.linkedAt || new Date().toISOString(),
+    source: 'link',
   };
-  if (i >= 0) roster.players[i] = { ...roster.players[i], ...row };
+
+  if (i >= 0) roster.players[i] = row;
+  else roster.players.push(row);
+  saveRoster(roster);
+  return row;
+}
+
+/** Track a Steam ID without tying it to the caller's Discord account. */
+function upsertTracked(entry) {
+  const roster = loadRoster();
+  const steam32 = Number(entry.steam32);
+  const i = roster.players.findIndex((p) => Number(p.steam32) === steam32);
+  const prev = i >= 0 ? roster.players[i] : {};
+
+  const row = {
+    discordId: prev.discordId || null,
+    steam32,
+    displayName: entry.displayName || prev.displayName || `Player ${steam32}`,
+    streamUrl: entry.streamUrl != null ? entry.streamUrl : prev.streamUrl || '',
+    linkedAt: prev.linkedAt || new Date().toISOString(),
+    source: prev.source === 'link' ? 'link' : 'track',
+  };
+
+  if (i >= 0) roster.players[i] = row;
   else roster.players.push(row);
   saveRoster(roster);
   return row;
@@ -76,8 +108,18 @@ function removeByDiscord(discordId) {
   return before !== roster.players.length;
 }
 
+function removeBySteam(steam32) {
+  const roster = loadRoster();
+  const before = roster.players.length;
+  roster.players = roster.players.filter((p) => Number(p.steam32) !== Number(steam32));
+  saveRoster(roster);
+  return before !== roster.players.length;
+}
+
 function allSteamIds() {
-  return loadRoster().players.map((p) => Number(p.steam32)).filter((n) => Number.isFinite(n) && n > 0);
+  return loadRoster()
+    .players.map((p) => Number(p.steam32))
+    .filter((n) => Number.isFinite(n) && n > 0);
 }
 
 module.exports = {
@@ -86,6 +128,8 @@ module.exports = {
   findByDiscord,
   findBySteam,
   upsertPlayer,
+  upsertTracked,
   removeByDiscord,
+  removeBySteam,
   allSteamIds,
 };
