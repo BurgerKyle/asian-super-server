@@ -1,7 +1,7 @@
 {
   "name": "asian-super-server",
   "version": "1.0.0",
-  "description": "Asian Super Server — Deadlock Discord bot for Asia queue nights, live lobbies, and leaderboards",
+  "description": "Asian Super Server - Deadlock Discord bot for Asia queue nights, live lobbies, and leaderboards",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
