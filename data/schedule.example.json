@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "timezone": "Asia/Manila",
+  "days": [5, 6],
+  "hour": 21,
+  "minute": 0,
+  "serverLabel": "Asia Super Server",
+  "remindMinutes": [15, 0]
+}

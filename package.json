@@ -1,0 +1,18 @@
+{
+  "name": "asian-super-server",
+  "version": "1.0.0",
+  "description": "Asian Super Server — Deadlock Discord bot for Asia queue nights, live lobbies, and leaderboards",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "register-commands": "node src/commands/register.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}

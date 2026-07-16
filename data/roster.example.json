@@ -1,0 +1,11 @@
+{
+  "players": [
+    {
+      "discordId": "REPLACE_WITH_DISCORD_USER_ID",
+      "steam32": 123456789,
+      "displayName": "ExamplePlayer",
+      "streamUrl": "https://twitch.tv/example",
+      "linkedAt": "2026-07-16T00:00:00.000Z"
+    }
+  ]
+}
