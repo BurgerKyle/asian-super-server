@@ -8,7 +8,7 @@ Runs as a background Node process on the shop kiosk hosting box (same NSSM patte
 
 | Feature | How |
 |---------|-----|
-| **Live lobbies** | Every ~15s polls `GET /v1/matches/active?account_ids=…` for the roster and edits one Discord message |
+| **Live lobbies** | Every ~15s polls `GET /v1/matches/active?account_ids=...` for the roster and edits one Discord message |
 | **Queue nights** | Posts reminders (T-15 / T-0) with the Asia Super Server label |
 | **Leaderboard** | Periodically scores rostered players from match history and edits a pinned message |
 | **Slash commands** | `/link`, `/unlink`, `/roster`, `/schedule`, `/queuecall` |
@@ -21,14 +21,15 @@ Deadlock API client patterns (headers, optional Bearer key, 429 backoff) are ada
 cd F:\Coding\asian-super-server
 npm install
 copy .env.example .env
-# fill DISCORD_* and CHANNEL_* — see SETUP.md
+# fill DISCORD_* and CHANNEL_* — see DISCORD-SETUP.md then SETUP.md
 npm run register-commands
 npm start
 ```
 
 ## Docs
 
-- **[SETUP.md](./SETUP.md)** — fresh-start plan from “I only have a Discord account + server” through kiosk NSSM install
+- **[DISCORD-SETUP.md](./DISCORD-SETUP.md)** — every Discord step (account ? server ? bot app ? invite ? channels ? roles ? IDs)
+- **[SETUP.md](./SETUP.md)** — full path from Discord through local smoke test and kiosk NSSM install
 - **`deploy/install-kiosk-service.ps1`** — one-time service registration on the hosting box
 
 ## Layout
