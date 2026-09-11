@@ -4,12 +4,12 @@ const path = require('path');
 function sleepSync(ms) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
-    /* spin — short retries only */
+    /* spin â€” short retries only */
   }
 }
 
 /**
- * Atomic JSON write with retries — Windows often throws EPERM/EBUSY on rename
+ * Atomic JSON write with retries â€” Windows often throws EPERM/EBUSY on rename
  * when another poller is reading the same file.
  */
 function writeJsonAtomic(filePath, data, retries = 6) {
@@ -39,6 +39,11 @@ function writeJsonAtomic(filePath, data, retries = 6) {
       return;
     } catch (err) {
       lastErr = err;
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* ignore */
+      }
       sleepSync(40 * (i + 1));
     }
   }

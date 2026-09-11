@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
-const { loadSchedule, loadState, saveState } = require('../store/state');
+const { loadSchedule, loadState, patchState } = require('../store/state');
+const { stripMassMentions } = require('../util/sanitize');
 
 /** Format parts in a given IANA timezone */
 function zonedParts(date, timeZone) {
@@ -16,10 +17,12 @@ function zonedParts(date, timeZone) {
   });
   const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
   const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  // Some Node/ICU builds report midnight as "24" with hour12:false — normalize to 0.
+  const hourRaw = Number(parts.hour);
   return {
     day: weekdayMap[parts.weekday] ?? 0,
-    hour: Number(parts.hour),
-    minute: Number(parts.minute),
+    hour: Number.isFinite(hourRaw) ? hourRaw % 24 : 0,
+    minute: Number(parts.minute) || 0,
     ymd: `${parts.year}-${parts.month}-${parts.day}`,
   };
 }
@@ -82,8 +85,7 @@ async function runQueueNotify(client) {
   const role = config.queuePingRoleId ? `<@&${config.queuePingRoleId}>` : '';
   await channel.send({ content: role || undefined, embeds: [embed] });
 
-  state.lastQueueNotifyKey = key;
-  saveState(state);
+  patchState({ lastQueueNotifyKey: key });
   console.log(`[queue] notified ${key}`);
 }
 
@@ -96,11 +98,12 @@ async function forceQueueNotify(client, extraNote = '') {
   const schedule = loadSchedule();
   const channel = await client.channels.fetch(channelId);
   const server = schedule.serverLabel || config.defaultServerLabel;
+  const note = stripMassMentions(extraNote);
   const embed = new EmbedBuilder()
     .setTitle('Asian Super Server | Queue Call')
     .setColor(0x2ecc71)
     .setDescription(
-      [`**Queue up now** on **${server}**.`, extraNote ? `\n${extraNote}` : ''].join('')
+      [`**Queue up now** on **${server}**.`, note ? `\n${note}` : ''].join('')
     )
     .setTimestamp(new Date());
   const role = config.queuePingRoleId ? `<@&${config.queuePingRoleId}>` : '';

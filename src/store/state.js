@@ -23,11 +23,21 @@ const EMPTY_STATE = {
 };
 
 function loadState() {
-  return readJson('state.json', EMPTY_STATE);
+  return { ...EMPTY_STATE, ...readJson('state.json', EMPTY_STATE) };
 }
 
 function saveState(state) {
   writeJson('state.json', state);
+}
+
+/**
+ * Merge a patch onto the on-disk state. Avoids poll-loop races where one job
+ * loads state, awaits Discord, then overwrites another job's message id.
+ */
+function patchState(patch) {
+  const next = { ...loadState(), ...patch };
+  saveState(next);
+  return next;
 }
 
 const EMPTY_SCHEDULE = {
@@ -41,7 +51,7 @@ const EMPTY_SCHEDULE = {
 };
 
 function loadSchedule() {
-  const s = readJson('schedule.json', EMPTY_SCHEDULE);
+  const s = { ...EMPTY_SCHEDULE, ...readJson('schedule.json', EMPTY_SCHEDULE) };
   if (!s.serverLabel) s.serverLabel = config.defaultServerLabel;
   return s;
 }
@@ -63,6 +73,7 @@ function saveScores(scores) {
 module.exports = {
   loadState,
   saveState,
+  patchState,
   loadSchedule,
   saveSchedule,
   loadScores,

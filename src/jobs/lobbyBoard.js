@@ -5,7 +5,7 @@ const { ensureHeroes, heroName, getHero } = require('../deadlock/heroes');
 const { heroEmoji } = require('../deadlock/heroEmojis');
 const { resolveSteamNames } = require('../deadlock/steamNames');
 const { loadRoster, allSteamIds } = require('../store/roster');
-const { loadState, saveState } = require('../store/state');
+const { loadState, patchState } = require('../store/state');
 const { getLikelyMatchPlayers, minutesSince } = require('../store/presenceMemory');
 
 const STAR = '\u2605';
@@ -44,7 +44,7 @@ function shortName(raw) {
     .replace(/\s+/g, ' ')
     .trim();
   if (s.length <= NAME_MAX) return s;
-  return `${s.slice(0, NAME_MAX - 1)}…`;
+  return `${s.slice(0, NAME_MAX - 1)}â€¦`;
 }
 
 /**
@@ -61,7 +61,7 @@ function playerLine(p, rosterBySteam, nameBySteam) {
   );
   const emoji = heroEmoji(p.hero_id);
   const hero = shortName(heroName(p.hero_id));
-  const mark = tracked ? STAR : '·';
+  const mark = tracked ? STAR : 'Â·';
   const nameBit = tracked ? `**${name}**` : name;
   const heroBit = emoji || `\`${hero}\``;
   const stream = tracked?.streamUrl ? ' [live]' : '';
@@ -108,7 +108,7 @@ function buildMatchEmbed(match, rosterBySteam, nameBySteam) {
     .setDescription(
       [
         `**${mode}** | \`${region}\` | \`${dur}\` | ${spectators} spectating`,
-        `${STAR} = Asian Super Server tracked  ·  hero icon = character`,
+        `${STAR} = Asian Super Server tracked  Â·  hero icon = character`,
       ].join('\n')
     )
     .addFields(fields)
@@ -229,7 +229,7 @@ async function runLobbyBoard(client) {
       await msg.edit({ content: '**Asian Super Server | Live Lobbies**', embeds: embeds.slice(0, 10) });
       return;
     } catch {
-      state.liveLobbiesMessageId = null;
+      patchState({ liveLobbiesMessageId: null });
     }
   }
 
@@ -237,8 +237,7 @@ async function runLobbyBoard(client) {
     content: '**Asian Super Server | Live Lobbies**',
     embeds: embeds.slice(0, 10),
   });
-  state.liveLobbiesMessageId = sent.id;
-  saveState(state);
+  patchState({ liveLobbiesMessageId: sent.id });
   await sent.pin().catch(() => {});
 }
 

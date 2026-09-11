@@ -5,12 +5,11 @@ const { getPlayerSummaries, classifyPresence } = require('../deadlock/steamPrese
 const {
   refineStatus,
   getMemory,
-  getLikelyMatchPlayers,
   formatElapsed,
   matchElapsedMs,
 } = require('../store/presenceMemory');
 const { loadRoster, allSteamIds } = require('../store/roster');
-const { loadState, saveState } = require('../store/state');
+const { loadState, patchState } = require('../store/state');
 
 const STAR = '\u2605';
 
@@ -185,8 +184,7 @@ async function runPresenceBoard(client) {
       timer = started != null ? formatElapsed(now - started) : null;
       label = 'in queue';
     } else if (status === 'loading_match') {
-      const hit = getLikelyMatchPlayers().find((x) => x.steam32 === steam32);
-      const since = hit?.since || mem?.likelyMatchSince;
+      const since = mem?.likelyMatchSince;
       timer = since != null ? formatElapsed(now - since) : null;
       label = 'since queue popped';
     } else if (status === 'in_match') {
@@ -228,13 +226,12 @@ async function runPresenceBoard(client) {
       await msg.edit({ embeds: [embed] });
       return;
     } catch {
-      state.presenceMessageId = null;
+      patchState({ presenceMessageId: null });
     }
   }
 
   const sent = await channel.send({ embeds: [embed] });
-  state.presenceMessageId = sent.id;
-  saveState(state);
+  patchState({ presenceMessageId: sent.id });
   await sent.pin().catch(() => {});
 }
 

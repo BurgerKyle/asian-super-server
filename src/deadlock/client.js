@@ -1,5 +1,5 @@
 /**
- * Deadlock API client — patterns adapted from WinFactory (browser-like headers,
+ * Deadlock API client â€” patterns adapted from WinFactory (browser-like headers,
  * optional Bearer key, 429 backoff). Used for active matches + history scoring.
  */
 
@@ -22,23 +22,43 @@ async function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const DEFAULT_TIMEOUT_MS = Number(process.env.DEADLOCK_FETCH_TIMEOUT_MS || 12_000);
+
 /**
  * @param {string} pathWithQuery e.g. /v1/matches/active?account_ids=1,2
- * @param {{ apiKey?: string, retries?: number }} opts
+ * @param {{ apiKey?: string, retries?: number, timeoutMs?: number }} opts
  */
 async function fetchDeadlockJson(pathWithQuery, opts = {}) {
-  const { apiKey, retries = 3 } = opts;
+  const { apiKey, retries = 3, timeoutMs = DEFAULT_TIMEOUT_MS } = opts;
   const url = pathWithQuery.startsWith('http') ? pathWithQuery : `${BASE}${pathWithQuery}`;
   let delayMs = 2000;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, { headers: buildHeaders(apiKey) });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(url, { headers: buildHeaders(apiKey), signal: ctrl.signal });
+    } catch (err) {
+      if (attempt === retries) {
+        throw new Error(
+          err?.name === 'AbortError'
+            ? `Deadlock API timeout after ${timeoutMs}ms`
+            : `Deadlock API network error: ${err.message}`
+        );
+      }
+      await sleep(delayMs);
+      delayMs *= 2;
+      continue;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (res.status === 429) {
       const retryAfter = res.headers.get('retry-after');
       const wait = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : delayMs;
       if (attempt === retries) throw new Error('Deadlock API rate limit exceeded');
-      await sleep(wait);
+      await sleep(Number.isFinite(wait) && wait > 0 ? wait : delayMs);
       delayMs *= 2;
       continue;
     }

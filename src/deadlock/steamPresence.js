@@ -1,4 +1,4 @@
-const { toSteam64 } = require('./steamNames');
+const { toSteam64, STEAM64_BASE } = require('../util/steamId');
 
 /** Deadlock on Steam */
 const DEADLOCK_APP_ID = '1422450';
@@ -27,9 +27,17 @@ async function getPlayerSummaries(apiKey, steam32Ids) {
     const chunk = unique.slice(i, i + 100);
     const steamids = chunk.map((id) => toSteam64(id)).join(',');
     const url = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${steamids}`;
-    const res = await fetch(url, {
-      headers: { Accept: 'application/json', 'User-Agent': 'AsianSuperServer/1.0' },
-    });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'AsianSuperServer/1.0' },
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`Steam API ${res.status}: ${body.slice(0, 200)}`);
@@ -38,7 +46,7 @@ async function getPlayerSummaries(apiKey, steam32Ids) {
     const players = data?.response?.players || [];
     for (const p of players) {
       const steam64 = BigInt(p.steamid);
-      const steam32 = Number(steam64 - 76561197960265728n);
+      const steam32 = Number(steam64 - STEAM64_BASE);
       map.set(steam32, p);
     }
   }
@@ -60,7 +68,7 @@ function classifyPresence(summary, inActiveMatch) {
   if (gameId === DEADLOCK_APP_ID) {
     if (SEARCHING_RE.test(extra)) return 'searching';
     if (IN_MATCH_RE.test(extra)) return 'in_match';
-    // In Deadlock but not clearly searching — often menu/hideout OR queue with generic "Deadlock" text.
+    // In Deadlock but not clearly searching â€” often menu/hideout OR queue with generic "Deadlock" text.
     // Heuristic: if extra is empty or exactly "Deadlock", treat as in_deadlock (includes possible silent queue).
     return 'in_deadlock';
   }
