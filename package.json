@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "register-commands": "node src/commands/register.js",
     "sync-hero-emojis": "node src/scripts/syncHeroEmojis.js",
-    "test": "node --require ./test/env.js --test test/**/*.test.js",
+    "test": "node --require ./test/env.js --test test/steamId.test.js test/sanitize.test.js test/core.test.js",
     "check": "node scripts/syntax-check.js && npm test",
     "lint": "node scripts/syntax-check.js",
     "smoke": "node scripts/smoke-offline.js"
