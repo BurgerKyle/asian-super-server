@@ -1,9 +1,9 @@
 const path = require('path');
 const { config } = require('../config');
 const { writeJsonAtomic, readJsonSafe } = require('../store/safeJson');
+const { toSteam64 } = require('../util/steamId');
 
 const CACHE_FILE = path.join(config.dataDir, 'steam_names.json');
-const STEAM64_BASE = 76561197960265728n;
 const FETCH_TIMEOUT_MS = 8000;
 
 /** @type {Record<string, { name: string, fetchedAt: number }>} */
@@ -21,10 +21,6 @@ function saveCache() {
   } catch (err) {
     console.warn('[steam-names] save failed:', err.message);
   }
-}
-
-function toSteam64(steam32) {
-  return (BigInt(steam32) + STEAM64_BASE).toString();
 }
 
 async function fetchWithTimeout(url, ms) {
@@ -82,9 +78,11 @@ async function resolveSteamName(steam32) {
 async function resolveSteamNames(steam32s) {
   const map = new Map();
   const unique = [...new Set(steam32s.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
-  for (const id of unique) {
-    map.set(id, await resolveSteamName(id));
-  }
+  await Promise.all(
+    unique.map(async (id) => {
+      map.set(id, await resolveSteamName(id));
+    })
+  );
   return map;
 }
 

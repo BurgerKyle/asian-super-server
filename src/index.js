@@ -70,7 +70,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     console.error(`[command:/${cmd}]`, err && err.stack ? err.stack : err);
     try {
-      const payload = { content: `Error: ${err.message || 'unknown'}`, flags: 64 };
+      // Do not leak internal error details (paths, API bodies) to Discord users.
+      const payload = { content: 'Something went wrong running that command. Try again in a moment.', flags: 64 };
       if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
       else await interaction.reply(payload);
     } catch (replyErr) {

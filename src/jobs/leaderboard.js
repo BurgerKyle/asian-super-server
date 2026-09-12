@@ -2,7 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { config } = require('../config');
 const { getMatchHistory } = require('../deadlock/client');
 const { loadRoster } = require('../store/roster');
-const { loadScores, saveScores, loadState, saveState } = require('../store/state');
+const { loadScores, saveScores, loadState, patchState } = require('../store/state');
 
 /** Fraction of a full lobby that must be ASS-tracked for the game to count. */
 const ASS_THRESHOLD = Number(process.env.ASS_LOBBY_THRESHOLD || 0.7);
@@ -180,13 +180,12 @@ async function runLeaderboard(client) {
       await msg.edit({ embeds: [embed] });
       return;
     } catch {
-      state.leaderboardMessageId = null;
+      patchState({ leaderboardMessageId: null });
     }
   }
 
   const sent = await channel.send({ embeds: [embed] });
-  state.leaderboardMessageId = sent.id;
-  saveState(state);
+  patchState({ leaderboardMessageId: sent.id });
   await sent.pin().catch(() => {});
 }
 

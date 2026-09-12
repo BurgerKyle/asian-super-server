@@ -1,21 +1,21 @@
-# SETUP ù Fresh start
+# SETUP ‚Äî Fresh start
 
 Follow these plans **in order**.
 
-**Discord-only steps (detailed):** see **[DISCORD-SETUP.md](./DISCORD-SETUP.md)** ù every click from ùI have a Discord accountù through bot invite, channels, roles, and copying IDs.
+**Discord-only steps (detailed):** see **[DISCORD-SETUP.md](./DISCORD-SETUP.md)** ‚Äî every click from "I have a Discord account" through bot invite, channels, roles, and copying IDs.
 
 | Plan | Where | What |
 |------|--------|------|
-| AùB | Discord | Create bot app, invite, channels, roles, copy IDs ? [DISCORD-SETUP.md](./DISCORD-SETUP.md) |
+| A‚ÄìB | Discord | Create bot app, invite, channels, roles, copy IDs ‚Üí [DISCORD-SETUP.md](./DISCORD-SETUP.md) |
 | C | This PC | `.env`, register slash commands, `npm start`, smoke test |
 | D | Kiosk | Clone to `C:\Apps\`, NSSM service |
 | E | Ongoing | Queue-night ops |
 
 ---
 
-## Plan A + B ù Discord
+## Plan A + B ‚Äî Discord
 
-Do **all** of [DISCORD-SETUP.md](./DISCORD-SETUP.md) sections 0ù13.
+Do **all** of [DISCORD-SETUP.md](./DISCORD-SETUP.md) sections 0‚Äì13.
 
 When finished you should have a filled notepad / `.env` with:
 
@@ -32,7 +32,7 @@ DEFAULT_SERVER_LABEL=Asia Super Server
 
 ---
 
-## Plan C ù Run on this dev PC (prove it works)
+## Plan C ‚Äî Run on this dev PC (prove it works)
 
 ### C1. Install and configure
 
@@ -45,15 +45,15 @@ notepad .env
 
 Paste the values from Discord setup. `DEADLOCK_API_KEY` is optional.
 
-**Steam presence / ìwho is queuingî board** (optional but recommended):
+**Steam presence / "who is queuing" board** (optional but recommended):
 
 1. Open [https://steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) while logged into Steam  
 2. Register a key (domain can be `localhost` or `winfactory.pro`)  
 3. Add to `.env`: `STEAM_API_KEY=...`  
-4. Tell players: Steam profile ? **Privacy** ? Game details = **Public** (otherwise the bot canít see Deadlock / Finding Match)  
+4. Tell players: Steam profile ‚Üí **Privacy** ‚Üí Game details = **Public** (otherwise the bot can't see Deadlock / Finding Match)  
 5. The board posts in `#queue-nights` (or `CHANNEL_PRESENCE` if set) and updates every ~20s
 
-### C2. Register slash commands (talks to Discordùs API)
+### C2. Register slash commands (talks to Discord‚Äîs API)
 
 ```powershell
 npm run register-commands
@@ -61,7 +61,7 @@ npm run register-commands
 
 You should see: `Done. Slash commands should appear in Discord within a minute.`
 
-This uploads `/link`, `/unlink`, `/roster`, `/mystats`, `/schedule`, `/queuecall` to **your server only** (guild commands ù instant).
+This uploads `/link`, `/unlink`, `/roster`, `/mystats`, `/schedule`, `/queuecall` to **your server only** (guild commands ‚Äî instant).
 
 ### C3. Start the bot
 
@@ -69,9 +69,9 @@ This uploads `/link`, `/unlink`, `/roster`, `/mystats`, `/schedule`, `/queuecall
 npm start
 ```
 
-Expect: `[boot] Asian Super Server online as ù`
+Expect: `[boot] Asian Super Server online as ‚Äî`
 
-Then in Discord (details in DISCORD-SETUP ù11):
+Then in Discord (details in DISCORD-SETUP ‚Äî11):
 
 1. Confirm the bot is **online** in the member list.
 2. Type `/` and confirm Asian Super Server commands appear.
@@ -87,7 +87,7 @@ Then in Discord (details in DISCORD-SETUP ù11):
 
 ---
 
-## Plan D ù Deploy to the kiosk hosting box
+## Plan D ‚Äî Deploy to the kiosk hosting box
 
 Same ops model as WinFactory: code under `C:\Apps\`, NSSM service, auto-start, crash restart, no visible window.
 
@@ -155,7 +155,7 @@ powershell -ExecutionPolicy Bypass -File C:\Apps\asian-super-server\deploy\unins
 
 ---
 
-## Plan E ù Operating queue nights
+## Plan E ‚Äî Operating queue nights
 
 1. Players run `/link` once (optional stream URL for lobby board).
 2. Admin runs `/schedule set hour:21 minute:0 days:5,6 timezone:Asia/Manila server:Asia Super Server`
@@ -169,7 +169,7 @@ Manual override anytime: `/queuecall note:Stack on Asia now`
 
 ## Checklist
 
-**Discord** (see [DISCORD-SETUP.md](./DISCORD-SETUP.md) ù13 for the full list):
+**Discord** (see [DISCORD-SETUP.md](./DISCORD-SETUP.md) ‚Äî13 for the full list):
 
 - [ ] Server ready + Developer Mode on
 - [ ] Application + bot created; token saved in `.env` only
@@ -193,7 +193,7 @@ Manual override anytime: `/queuecall note:Stack on Asia now`
 | `Missing required env var` | Fill `.env`; restart process |
 | Lobby board never updates | Need at least one `/link`; player must be in an **active** match visible to the API watch tab |
 | 401/403 from Discord | Reset bot token; update `.env`; restart |
-| Bot cannot send / pin | Channel permissions ù see DISCORD-SETUP ù8 |
+| Bot cannot send / pin | Channel permissions ‚Äî see DISCORD-SETUP ‚Äî8 |
 | Role ping does nothing | Role mentionable? Correct `QUEUE_PING_ROLE_ID`? Bot role above Queue Night? |
 | Service will not start on kiosk | Check `logs\*.err.log`; confirm Node path; confirm `.env` exists under `C:\Apps\asian-super-server` |
 | Rate limit (429) | Bot backs off automatically; increase `LOBBY_POLL_MS` if needed |

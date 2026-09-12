@@ -1,7 +1,7 @@
-# install-kiosk-service.ps1 — ONE-TIME on the kiosk hosting box (run as Administrator).
+# install-kiosk-service.ps1 â€” ONE-TIME on the kiosk hosting box (run as Administrator).
 #
 # Registers Asian Super Server as an NSSM Windows service so it starts at boot
-# under SYSTEM — same pattern as winfactory-server / ips-*.
+# under SYSTEM â€” same pattern as winfactory-server / ips-*.
 # Windowless: kids never see a console over their game.
 #
 # Prereqs: NSSM on PATH, Node 18+ on PATH, repo cloned to $RepoRoot, .env filled.
@@ -15,7 +15,7 @@ $Script   = "src\index.js"
 $Logs     = Join-Path $RepoRoot "logs"
 
 if (-not (Test-Path (Join-Path $RepoRoot ".env"))) {
-  throw "Missing $RepoRoot\.env — copy .env.example and fill Discord + channel IDs first."
+  throw "Missing $RepoRoot\.env â€” copy .env.example and fill Discord + channel IDs first."
 }
 
 New-Item -ItemType Directory -Force -Path $Logs | Out-Null

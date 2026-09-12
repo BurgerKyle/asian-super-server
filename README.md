@@ -11,7 +11,8 @@ Runs as a background Node process on the shop kiosk hosting box (same NSSM patte
 | **Live lobbies** | Every ~15s polls `GET /v1/matches/active?account_ids=...` for the roster and edits one Discord message |
 | **Queue nights** | Posts reminders (T-15 / T-0) with the Asia Super Server label |
 | **Leaderboard** | Periodically scores rostered players from match history and edits a pinned message |
-| **Slash commands** | `/link`, `/unlink`, `/roster`, `/schedule`, `/queuecall` |
+| **Presence board** | Steam + Deadlock "who's around" with queue/match timers |
+| **Slash commands** | `/link`, `/unlink`, `/track`, `/untrack`, `/roster`, `/mystats`, `/schedule`, `/queuecall` |
 
 Deadlock API client patterns (headers, optional Bearer key, 429 backoff) are adapted from the WinFactory codebase, but this repo is standalone.
 
@@ -26,6 +27,16 @@ npm run register-commands
 npm start
 ```
 
+## Checks
+
+```bash
+npm run check   # syntax + unit tests
+npm test
+npm run smoke   # offline embed/command smoke (no Discord token needed)
+```
+
+After pulling command permission changes (e.g. `/track` admin-only), re-run `npm run register-commands`.
+
 ## Docs
 
 - **[DISCORD-SETUP.md](./DISCORD-SETUP.md)** — every Discord step (account ? server ? bot app ? invite ? channels ? roles ? IDs)
@@ -37,10 +48,12 @@ npm start
 ```
 src/
   index.js              bot entry + poll loops
-  deadlock/client.js    API client
-  jobs/                 lobbyBoard, queueNotify, leaderboard
+  util/                 steam id + sanitize helpers
+  deadlock/             API client, Steam presence, heroes
+  jobs/                 lobbyBoard, queueNotify, leaderboard, presenceBoard
   commands/             slash command handlers + registrar
   store/                roster / schedule / scores JSON
 data/                   runtime JSON (gitignored except examples)
 deploy/                 NSSM install scripts
+test/                   node:test unit tests
 ```

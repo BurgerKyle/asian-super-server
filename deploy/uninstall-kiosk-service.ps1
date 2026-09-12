@@ -1,4 +1,4 @@
-# uninstall-kiosk-service.ps1 — remove the NSSM service (Administrator).
+# uninstall-kiosk-service.ps1 â€” remove the NSSM service (Administrator).
 
 $ErrorActionPreference = "Stop"
 $Service = "asian-super-server"

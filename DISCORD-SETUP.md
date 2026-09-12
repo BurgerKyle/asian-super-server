@@ -1,4 +1,4 @@
-# Discord setup — every step
+# Discord setup â€” every step
 
 This guide assumes you only have a **Discord account**. It walks through creating a server (if needed), creating the bot application, inviting it, building channels/roles, and copying every ID the `.env` file needs.
 
@@ -20,7 +20,7 @@ QUEUE_PING_ROLE_ID=
 
 1. Open [https://discord.com/app](https://discord.com/app) (browser) **or** the Discord desktop app.
 2. Sign in with the account that will **own** the Asian Super Server community.
-3. Stay logged in — the Developer Portal uses the same login.
+3. Stay logged in â€” the Developer Portal uses the same login.
 
 ---
 
@@ -29,7 +29,7 @@ QUEUE_PING_ROLE_ID=
 1. In Discord, look at the left sidebar (server list).
 2. Click the **+** button (Add a Server).
 3. Choose **Create My Own**.
-4. Choose **For a club or community** (or Skip — either is fine).
+4. Choose **For a club or community** (or Skip â€” either is fine).
 5. Server name: `Asian Super Server` (or whatever you prefer).
 6. Optional: upload an icon.
 7. Click **Create**.
@@ -49,7 +49,7 @@ You are now the server owner. That is enough permission for everything below.
 4. Toggle **Developer Mode** **ON**.
 5. Close settings (X).
 
-You can now right-click almost anything ? **Copy … ID**.
+You can now right-click almost anything ? **Copy â€¦ ID**.
 
 ---
 
@@ -63,7 +63,7 @@ You can now right-click almost anything ? **Copy … ID**.
 DISCORD_GUILD_ID=1234567890123456789
 ```
 
-(Your number will be different — that is fine.)
+(Your number will be different â€” that is fine.)
 
 ---
 
@@ -98,7 +98,7 @@ DISCORD_CLIENT_ID=1234567890123456789
 
 Optional on this page:
 
-- **Description:** `Deadlock Asia queue nights — live lobbies, queue pings, leaderboard.`
+- **Description:** `Deadlock Asia queue nights â€” live lobbies, queue pings, leaderboard.`
 - **App Icon / Cover Image:** upload a logo if you want.
 - Click **Save Changes** if you edit anything.
 
@@ -106,7 +106,7 @@ Optional on this page:
 
 1. Left sidebar ? click **Bot**.
 2. If you see **Add Bot**, click it ? confirm **Yes, do it!**
-3. (Newer portals sometimes create the bot automatically — if you already see a bot username and token controls, you are done with this step.)
+3. (Newer portals sometimes create the bot automatically â€” if you already see a bot username and token controls, you are done with this step.)
 
 ### 4.5 Set the bot username / avatar (optional but nice)
 
@@ -148,7 +148,7 @@ DISCORD_TOKEN=paste.the.long.token.here
 - Treat this like a password.
 - Never paste it into a Discord channel, GitHub issue, or screenshot.
 - Never commit `.env` to git (already gitignored).
-- If it ever leaks: return here ? **Reset Token** ? update `.env` ? restart the bot.
+- If it ever leaks: return here â†’ **Reset Token** â†’ update `.env` ? restart the bot.
 
 ---
 
@@ -195,7 +195,7 @@ Still in the Developer Portal.
 1. Open Discord ? your server.
 2. Open the member list (right side) or check `#general`.
 3. You should see **Asian Super Server** (or your bot name) online or offline with a bot tag.
-4. It may show **Offline** until you run `npm start` later — that is normal.
+4. It may show **Offline** until you run `npm start` later â€” that is normal.
 
 ---
 
@@ -211,9 +211,9 @@ Still in the Developer Portal.
 6. Color: pick anything visible (e.g. gold/orange).
 7. Leave permissions at defaults (this role is for **pinging**, not admin powers).
 8. Important: open the role ? ensure **Allow anyone to @mention this role** is **ON**  
-   (wording varies: “Display role members separately” is optional; mentionable must be on so the bot can ping it).
+   (wording varies: "Display role members separately" is optional; mentionable must be on so the bot can ping it).
 9. Click **Save Changes**.
-10. Drag the role **below** your personal Admin/Owner roles if you care about hierarchy. The **bot’s role** must sit **above** roles it needs to mention in some setups — safest: put the bot role reasonably high (see §8).
+10. Drag the role **below** your personal Admin/Owner roles if you care about hierarchy. The **bot's role** must sit **above** roles it needs to mention in some setups â€” safest: put the bot role reasonably high (see Â§8).
 
 ### 6.2 Copy the Role ID
 
@@ -248,9 +248,9 @@ Inside that category (or at the top level), create **three text channels**:
 
 | Channel name | Purpose |
 |--------------|---------|
-| `live-lobbies` | Bot keeps one pinned “who is in game” embed updated |
+| `live-lobbies` | Bot keeps one pinned "who is in game" embed updated |
 | `leaderboard` | Bot keeps one pinned leaderboard embed updated |
-| `queue-nights` | Bot posts “queue in 15 / queue now” announcements |
+| `queue-nights` | Bot posts "queue in 15 / queue now" announcements |
 
 How to create each:
 
@@ -285,7 +285,7 @@ Do this for **each** of: `#live-lobbies`, `#leaderboard`, `#queue-nights`.
 1. Right-click the channel ? **Edit Channel**.
 2. Open **Permissions**.
 3. Under **Roles/Members**, click **Add** / **+** and add the **Asian Super Server** bot role  
-   (the role named after your bot — Discord creates a role matching the bot when it joins).
+   (the role named after your bot â€” Discord creates a role matching the bot when it joins).
 4. For that bot role in this channel, set:
 
    | Permission | Setting |
@@ -309,7 +309,7 @@ On `#live-lobbies` and `#leaderboard` you can deny **Send Messages** for `@every
 1. Server Settings ? **Roles**.
 2. Find the role Discord created for the bot (same name as the bot).
 3. Drag it **above** the `Queue Night` role.
-4. Save. This avoids “missing permissions” when mentioning `Queue Night`.
+4. Save. This avoids "missing permissions" when mentioning `Queue Night`.
 
 ---
 
@@ -326,7 +326,7 @@ QUEUE_PING_ROLE_ID=14.................
 DEFAULT_SERVER_LABEL=Asia Super Server
 ```
 
-All IDs are long numbers (usually 17–19 digits). The token is a long string with dots.
+All IDs are long numbers (usually 17â€“19 digits). The token is a long string with dots.
 
 ---
 
@@ -354,7 +354,7 @@ npm start
 
 ## 11. Discord checks after the bot is online
 
-When the terminal shows `Asian Super Server online as …`:
+When the terminal shows `Asian Super Server online as â€¦`:
 
 ### 11.1 Bot appears online
 
@@ -371,7 +371,7 @@ When the terminal shows `Asian Super Server online as …`:
    - `/mystats`
    - `/schedule`
    - `/queuecall`
-3. If missing: wait 1–2 minutes, restart Discord (Ctrl+R), re-run `npm run register-commands`.
+3. If missing: wait 1â€“2 minutes, restart Discord (Ctrl+R), re-run `npm run register-commands`.
 
 ### 11.3 Link yourself
 
@@ -382,13 +382,13 @@ When the terminal shows `Asian Super Server online as …`:
 
 ### 11.4 Watch the boards populate
 
-1. Open `#live-lobbies` — within ~15 seconds the bot should post (and pin) an embed. Empty roster games is normal until someone linked is in a match.
-2. Open `#leaderboard` — within a few minutes an embed should appear/pin.
+1. Open `#live-lobbies` â€” within ~15 seconds the bot should post (and pin) an embed. Empty roster games is normal until someone linked is in a match.
+2. Open `#leaderboard` â€” within a few minutes an embed should appear/pin.
 3. As a server admin with **Manage Server**, run:
 
    `/schedule set hour:21 minute:0 days:5,6 timezone:Asia/Manila server:Asia Super Server`
 
-4. Run `/queuecall note:Test ping` — `#queue-nights` should get an embed and ping `@Queue Night` if the role ID is set.
+4. Run `/queuecall note:Test ping` â€” `#queue-nights` should get an embed and ping `@Queue Night` if the role ID is set.
 
 ---
 
@@ -396,10 +396,10 @@ When the terminal shows `Asian Super Server online as …`:
 
 | What you see | Likely cause | Fix |
 |--------------|--------------|-----|
-| Invite URL says “bot requires code grant” | Wrong OAuth flow | Use **URL Generator** with scopes `bot` + `applications.commands` only |
+| Invite URL says "bot requires code grant" | Wrong OAuth flow | Use **URL Generator** with scopes `bot` + `applications.commands` only |
 | Bot missing from server | Invite never finished / wrong server | Re-open Generated URL and Authorize again |
 | Slash commands invisible | Commands not registered, or wrong guild ID | Confirm `DISCORD_GUILD_ID`; run `npm run register-commands` |
-| `Missing Access` / cannot send | Channel perms | §8 — allow View/Send/Embed/Manage on those channels |
+| `Missing Access` / cannot send | Channel perms | Â§8 â€” allow View/Send/Embed/Manage on those channels |
 | Role ping shows `@deleted-role` or no ping | Wrong role ID / not mentionable / bot role too low | Recopy role ID; make role mentionable; raise bot role |
 | Token invalid | Reset or typo in `.env` | Reset token in portal; update `.env`; restart |
 | Two bots in the server | Old test app | Kick the unused bot; keep one application |

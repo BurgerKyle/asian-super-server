@@ -83,7 +83,7 @@ async function ensureHeroEmojis(client) {
       continue;
     }
 
-    // Already have a cached mention from a previous session ù keep it
+    // Already have a cached mention from a previous session ‚Äî keep it
     if (emojiByHeroId.has(id)) continue;
 
     if (!hero.icon) continue;

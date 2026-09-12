@@ -15,16 +15,13 @@ const { loadSchedule, saveSchedule } = require('../store/state');
 const { forceQueueNotify } = require('../jobs/queueNotify');
 const { resolveSteamName } = require('../deadlock/steamNames');
 const { config } = require('../config');
-
-function steam32FromInput(raw) {
-  const s = String(raw).trim();
-  if (/^\d{17}$/.test(s)) {
-    return Number(BigInt(s) - 76561197960265728n);
-  }
-  const n = Number.parseInt(s, 10);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n;
-}
+const { steam32FromInput } = require('../util/steamId');
+const {
+  sanitizeStreamUrl,
+  stripMassMentions,
+  isValidTimeZone,
+  clampDiscordContent,
+} = require('../util/sanitize');
 
 const commands = [
   new SlashCommandBuilder()
@@ -37,7 +34,7 @@ const commands = [
         .setRequired(true)
     )
     .addStringOption((o) =>
-      o.setName('stream_url').setDescription('Optional Twitch/YouTube URL').setRequired(false)
+      o.setName('stream_url').setDescription('Optional Twitch/YouTube/Kick URL').setRequired(false)
     ),
 
   new SlashCommandBuilder()
@@ -54,8 +51,9 @@ const commands = [
       o.setName('name').setDescription('Display name (optional; auto-fetched if omitted)').setRequired(false)
     )
     .addStringOption((o) =>
-      o.setName('stream_url').setDescription('Optional Twitch/YouTube URL').setRequired(false)
-    ),
+      o.setName('stream_url').setDescription('Optional Twitch/YouTube/Kick URL').setRequired(false)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   new SlashCommandBuilder()
     .setName('untrack')
@@ -123,7 +121,12 @@ async function handleInteraction(interaction) {
       });
       return;
     }
-    const streamUrl = interaction.options.getString('stream_url') || '';
+    const streamCheck = sanitizeStreamUrl(interaction.options.getString('stream_url') || '');
+    if (!streamCheck.ok) {
+      await interaction.reply({ content: streamCheck.error, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    const streamUrl = streamCheck.url;
     const row = upsertPlayer({
       discordId: interaction.user.id,
       steam32,
@@ -157,8 +160,13 @@ async function handleInteraction(interaction) {
       });
       return;
     }
+    const streamCheck = sanitizeStreamUrl(interaction.options.getString('stream_url') || '');
+    if (!streamCheck.ok) {
+      await interaction.editReply({ content: streamCheck.error });
+      return;
+    }
     const customName = interaction.options.getString('name');
-    const streamUrl = interaction.options.getString('stream_url') || '';
+    const streamUrl = streamCheck.url;
     let displayName = customName;
     if (!displayName) {
       try {
@@ -197,7 +205,7 @@ async function handleInteraction(interaction) {
     const { players } = loadRoster();
     if (!players.length) {
       await interaction.reply({
-        content: 'Roster is empty. Use `/link` for yourself or `/track` for anyone.',
+        content: 'Roster is empty. Use `/link` for yourself or ask an admin to `/track` someone.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -207,8 +215,12 @@ async function handleInteraction(interaction) {
       const star = '\u2605';
       return `${star} **${p.displayName}** | \`${p.steam32}\` | ${who}${p.streamUrl ? ' | stream' : ''}`;
     });
+    const more =
+      players.length > 40 ? `\n_…and ${players.length - 40} more (showing first 40)._` : '';
     await interaction.reply({
-      content: `**Asian Super Server roster** (${players.length})\n${lines.join('\n')}`,
+      content: clampDiscordContent(
+        `**Asian Super Server roster** (${players.length})\n${lines.join('\n')}${more}`
+      ),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -259,9 +271,17 @@ async function handleInteraction(interaction) {
         });
         return;
       }
+      const timezone = interaction.options.getString('timezone') || 'Asia/Manila';
+      if (!isValidTimeZone(timezone)) {
+        await interaction.reply({
+          content: 'Invalid timezone. Use an IANA name like `Asia/Manila` or `UTC`.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
       const schedule = {
         enabled: true,
-        timezone: interaction.options.getString('timezone') || 'Asia/Manila',
+        timezone,
         days,
         hour: interaction.options.getInteger('hour', true),
         minute: interaction.options.getInteger('minute', true),
@@ -270,14 +290,14 @@ async function handleInteraction(interaction) {
       };
       saveSchedule(schedule);
       await interaction.reply({
-        content: `Schedule saved. Queue nights: days [${days.join(',')}] at ${schedule.hour}:${String(schedule.minute).padStart(2, '0')} ${schedule.timezone} -> **${schedule.serverLabel}**`,
+        content: `Schedule saved. Queue nights: days [${days.join(',')}] at ${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')} ${schedule.timezone} -> **${schedule.serverLabel}**`,
       });
       return;
     }
   }
 
   if (name === 'queuecall') {
-    const note = interaction.options.getString('note') || '';
+    const note = stripMassMentions(interaction.options.getString('note') || '');
     await forceQueueNotify(interaction.client, note);
     await interaction.reply({ content: 'Queue call sent.', flags: MessageFlags.Ephemeral });
   }
